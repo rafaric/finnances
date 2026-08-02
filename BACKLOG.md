@@ -52,27 +52,36 @@
 		- PR revisado y mergeado en `main` (https://github.com/rafaric/finnances/pull/7).
 		- Política de balances: `saldoInicial` es inmutable y solo carga al alta; no se crea `saldoActual` persistido por ahora.
 2. Implementar `crearTransaccion()` con idempotencia y cálculo de saldo. [COMPLETADO]
-3. Implementar `POST /api/v1/gastos` y validación básica.
+3. Implementar `POST /api/v1/gastos` y validación básica. [COMPLETADO]
 4. Implementar formulario básico de nuevo gasto e inicio de la PWA.
 5. Agregar tests unitarios para creación de transacciones y cálculo de saldo. [COMPLETADO]
+6. Añadir CI básica y pipeline de tests. [COMPLETADO]
+
+> PR mergeado en `main`: https://github.com/rafaric/finnances/pull/11
 
 ## Próximas tareas (alta prioridad)
 
-- Implementar `POST /api/v1/gastos` (endpoint y validación)
-	- Descripción: Endpoint público de la API para crear gastos/ingresos utilizando la capa de servicio central `crearTransaccion()`.
+- Implementar `POST /api/v1/gastos/ocr` con manejo de fallo y estado `PENDIENTE_REVISION`.
+	- Descripción: Endpoint que recibe datos OCR/IA, crea transacción provisional y retorna 202 cuando debe revisarse.
 	- Criterios de aceptación:
-		- Valida entrada con Zod según el DTO de `crearTransaccion`.
-		- Reusa la lógica de idempotencia existente (acepta `idempotencyKey`).
-		- Devuelve `202` cuando la transacción queda en `PENDIENTE_REVISION` por IA/fallback; `201` cuando se confirma.
+		- Valida la entrada OCR/IA y no genera 500s por datos incompletos.
+		- Crea transacciones en estado `PENDIENTE_REVISION` cuando no se puede confirmar automáticamente.
+		- Permite una ruta de corrección posterior sin duplicar la operación.
 
-- Implementar `calcularSaldo()` (servicio de lectura)
-	- Descripción: Función pura que toma `Cuenta` y movimientos aplicables y devuelve el saldo calculado partiendo de `saldoInicial`.
+- Implementar `POST /api/v1/transferencias`.
+	- Descripción: Servicio y endpoint para transferencias internas entre cuentas propias.
 	- Criterios de aceptación:
-		- No persiste datos; es determinista y testeable.
-		- Cobertura de tests para transferencias internas, cargos y abonos, y cuotas vinculadas.
+		- Ajusta ambos saldos en una transacción DB atómica.
+		- Registra la transferencia y genera la transacción asociada con idempotencia.
 
-- Añadir CI: tests unitarios e integración (GitHub Actions)
-	- Descripción: Pipeline minimal que ejecuta `npm install` y corre la suite de tests en Node 18+.
+- Implementar `POST /api/v1/transacciones/:id/categoria`.
+	- Descripción: Endpoint para reasignar la categoría de una transacción ya existente.
 	- Criterios de aceptación:
-		- Job `test` en `.github/workflows/test.yml` que corre `npx ts-node tests/crearTransaccion.test.ts` o el runner de tests elegido.
-		- Pipeline que falla si los tests fallan.
+		- Valida que la transacción existe y pertenece al usuario.
+		- Actualiza la categoría sin alterar la idempotencia original.
+
+- Avanzar en UI/UX de PWA: formulario y listado de movimientos.
+	- Descripción: Comenzar el frontend con el flujo de nuevo gasto y la vista de movimientos.
+
+- Documentar el contrato de API y los flujos de balance.
+	- Descripción: Actualizar `docs/04-api-y-arquitectura-tecnica.md` con los endpoints actuales y el cálculo de `saldoInicial + movimientos`.
