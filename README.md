@@ -15,3 +15,21 @@ PWA de finanzas personales enfocada en el contexto argentino.
 ## Objetivo
 
 Construir un MVP de finanzas personales con captura de gastos vía Apple Pay, OCR y carga manual, reglas financieras argentinas y una PWA segura para un solo usuario.
+
+## Ejecución local
+
+### Backend
+
+```bash
+cd backend
+npm install
+npm test
+```
+
+### Variables de entorno
+
+Crea un archivo `backend/.env` basado en `backend/.env.example` antes de ejecutar el backend o las pruebas.
+
+### CI
+
+Se agregó una workflow de GitHub Actions en `.github/workflows/test.yml` que instala dependencias, despliega migraciones Prisma y ejecuta los tests.
