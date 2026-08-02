@@ -1,0 +1,248 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TipoCuenta {
+  EFECTIVO
+  BILLETERA_VIRTUAL
+  CUENTA_BANCARIA
+  TARJETA_CREDITO
+}
+
+enum Categoria {
+  COMIDA
+  TRANSPORTE
+  VIVIENDA
+  SERVICIOS
+  OCIO
+  DEUDAS
+  OTROS
+}
+
+enum OrigenTransaccion {
+  APPLE_PAY
+  OCR_IA
+  MANUAL
+  RECURRENTE_CONFIRMADO
+  RESUMEN_CONFIRMADO
+}
+
+enum EstadoTransaccion {
+  CONFIRMADA
+  PENDIENTE_REVISION
+  PENDIENTE_CATEGORIA
+}
+
+enum EstadoCuota {
+  PROYECTADO
+  CONFIRMADO
+  OMITIDO
+}
+
+enum EstadoResumen {
+  PENDIENTE
+  PAGADO_TOTAL
+  PAGADO_PARCIAL
+}
+
+enum TipoMonto {
+  FIJO
+  VARIABLE
+}
+
+enum Frecuencia {
+  SEMANAL
+  QUINCENAL
+  MENSUAL
+  ANUAL
+}
+
+enum MetodoPagoRecurrente {
+  DEBITO_AUTOMATICO
+  MANUAL
+}
+
+enum EstadoInstanciaRecurrente {
+  PROYECTADO
+  CONFIRMADO
+  OMITIDO
+}
+
+model Cuenta {
+  id                  String     @id @default(cuid())
+  nombre              String
+  tipo                TipoCuenta
+  banco               String?
+  ultimosDigitos      String?
+  esPrincipal         Boolean    @default(false)
+  esCuentaPuente      Boolean    @default(false)
+  colorIdentificador  String?
+  saldoInicial        Decimal    @default("0")
+  diaCierre           Int?
+  diaPago             Int?
+  diasRecordatorio    Int?       @default(3)
+  limiteCompra        Decimal?
+  limiteDisponible    Decimal?
+  limiteActualizadoEn DateTime?
+  saldoActualizadoEn  DateTime?
+
+  transacciones         Transaccion[]
+  compras               Compra[]
+  resumenes             Resumen[]
+  recurrentes           GastoRecurrente[]
+  transferenciasOrigen  TransferenciaInterna[] @relation("TransferOrigen")
+  transferenciasDestino TransferenciaInterna[] @relation("TransferDestino")
+  ingresos              Ingreso[]
+}
+
+model Ingreso {
+  id                String   @id @default(cuid())
+  monto             Decimal
+  fechaCobro        DateTime
+  periodoDisponible String
+  concepto          String
+  cuentaId          String
+  cuenta            Cuenta   @relation(fields: [cuentaId], references: [id])
+}
+
+model Subcategoria {
+  id            String            @id @default(cuid())
+  nombre        String
+  categoria     Categoria
+  transacciones Transaccion[]
+  recurrentes   GastoRecurrente[]
+}
+
+model Transaccion {
+  id                       String                    @id @default(cuid())
+  monto                    Decimal                   @db.Decimal(10, 2)
+  moneda                   String                    @default("ARS")
+  montoUSD                 Decimal?
+  cotizacionUsada          Decimal?
+  comercio                 String?
+  origen                   OrigenTransaccion
+  cuentaId                 String
+  cuenta                   Cuenta                    @relation(fields: [cuentaId], references: [id])
+  categoria                Categoria
+  subcategoriaId           String?
+  subcategoria             Subcategoria?             @relation(fields: [subcategoriaId], references: [id])
+  fecha                    DateTime
+  estado                   EstadoTransaccion         @default(CONFIRMADA)
+  idempotencyKey           String                    @unique
+  textoCrudoOCR            String?
+  transferenciaFondeoId    String?                   @unique
+  transferenciaFondeo      TransferenciaInterna?     @relation("TransferenciaFondeo", fields: [transferenciaFondeoId], references: [id])
+  createdAt                DateTime                  @default(now())
+  cuota                    Cuota?                    @relation("TransaccionCuota")
+  instanciaGastoRecurrente InstanciaGastoRecurrente? @relation("TransaccionInstanciaRecurrente")
+}
+
+model Compra {
+  id             String   @id @default(cuid())
+  montoTotal     Decimal  @db.Decimal(10, 2)
+  comercio       String
+  fechaCompra    DateTime
+  cantidadCuotas Int      @default(1)
+  cuentaId       String
+  cuenta         Cuenta   @relation(fields: [cuentaId], references: [id])
+  cuotas         Cuota[]
+}
+
+model Cuota {
+  id              String       @id @default(cuid())
+  compraId        String
+  compra          Compra       @relation(fields: [compraId], references: [id])
+  numeroCuota     Int
+  monto           Decimal      @db.Decimal(10, 2)
+  fechaImputacion DateTime
+  estado          EstadoCuota  @default(PROYECTADO)
+  transaccionId   String?      @unique
+  transaccion     Transaccion? @relation("TransaccionCuota", fields: [transaccionId], references: [id])
+}
+
+model Resumen {
+  id                     String               @id @default(cuid())
+  cuentaId               String
+  cuenta                 Cuenta               @relation(fields: [cuentaId], references: [id])
+  periodo                String
+  montoTotalInformado    Decimal              @db.Decimal(10, 2)
+  montoMinimoInformado   Decimal              @db.Decimal(10, 2)
+  totalConsumosInformado Decimal?
+  montoPagado            Decimal?
+  fechaPago              DateTime?
+  saldoFinanciado        Decimal              @default("0")
+  metodoPagoMinimo       MetodoPagoRecurrente @default(DEBITO_AUTOMATICO)
+  estado                 EstadoResumen        @default(PENDIENTE)
+  instancias             InstanciaResumen[]
+}
+
+model InstanciaResumen {
+  id            String                    @id @default(cuid())
+  resumenId     String
+  resumen       Resumen                   @relation(fields: [resumenId], references: [id])
+  montoEsperado Decimal                   @db.Decimal(10, 2)
+  fechaEsperada DateTime
+  metodoPago    MetodoPagoRecurrente
+  estado        EstadoInstanciaRecurrente @default(PROYECTADO)
+}
+
+model GastoRecurrente {
+  id                 String                     @id @default(cuid())
+  nombre             String
+  tipoMonto          TipoMonto
+  montoFijo          Decimal?
+  categoria          Categoria
+  subcategoriaId     String?
+  subcategoria       Subcategoria?              @relation(fields: [subcategoriaId], references: [id])
+  activo             Boolean                    @default(true)
+  cuentaId           String
+  cuenta             Cuenta                     @relation(fields: [cuentaId], references: [id])
+  metodoPago         MetodoPagoRecurrente
+  frecuencia         Frecuencia
+  diaDelMes          Int?
+  diaDeSemana        Int?
+  mesDelAno          Int?
+  intervaloQuincenal DateTime?
+  notas              String?                    @db.VarChar(60)
+  instancias         InstanciaGastoRecurrente[]
+}
+
+model InstanciaGastoRecurrente {
+  id                String                    @id @default(cuid())
+  gastoRecurrenteId String
+  gastoRecurrente   GastoRecurrente           @relation(fields: [gastoRecurrenteId], references: [id])
+  fechaVencimiento  DateTime
+  monto             Decimal?
+  montoEsEstimado   Boolean                   @default(false)
+  estado            EstadoInstanciaRecurrente @default(PROYECTADO)
+  cuentaRealId      String?
+  transaccionId     String?                   @unique
+  transaccion       Transaccion?              @relation("TransaccionInstanciaRecurrente", fields: [transaccionId], references: [id])
+}
+
+model TransferenciaInterna {
+  id              String       @id @default(cuid())
+  cuentaOrigenId  String
+  cuentaOrigen    Cuenta       @relation("TransferOrigen", fields: [cuentaOrigenId], references: [id])
+  cuentaDestinoId String
+  cuentaDestino   Cuenta       @relation("TransferDestino", fields: [cuentaDestinoId], references: [id])
+  monto           Decimal      @db.Decimal(10, 2)
+  fecha           DateTime     @default(now())
+  nota            String?      @db.VarChar(60)
+  createdAt       DateTime     @default(now())
+  transaccion     Transaccion? @relation("TransferenciaFondeo")
+}
+
+model ContactoCategoria {
+  id              String    @id @default(cuid())
+  nombreDetectado String    @unique
+  categoria       Categoria
+  subcategoriaId  String?
+  aliasCBU        String?
+  usoCount        Int       @default(0)
+}
