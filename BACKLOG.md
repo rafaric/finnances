@@ -55,3 +55,24 @@
 3. Implementar `POST /api/v1/gastos` y validación básica.
 4. Implementar formulario básico de nuevo gasto e inicio de la PWA.
 5. Agregar tests unitarios para creación de transacciones y cálculo de saldo. [COMPLETADO]
+
+## Próximas tareas (alta prioridad)
+
+- Implementar `POST /api/v1/gastos` (endpoint y validación)
+	- Descripción: Endpoint público de la API para crear gastos/ingresos utilizando la capa de servicio central `crearTransaccion()`.
+	- Criterios de aceptación:
+		- Valida entrada con Zod según el DTO de `crearTransaccion`.
+		- Reusa la lógica de idempotencia existente (acepta `idempotencyKey`).
+		- Devuelve `202` cuando la transacción queda en `PENDIENTE_REVISION` por IA/fallback; `201` cuando se confirma.
+
+- Implementar `calcularSaldo()` (servicio de lectura)
+	- Descripción: Función pura que toma `Cuenta` y movimientos aplicables y devuelve el saldo calculado partiendo de `saldoInicial`.
+	- Criterios de aceptación:
+		- No persiste datos; es determinista y testeable.
+		- Cobertura de tests para transferencias internas, cargos y abonos, y cuotas vinculadas.
+
+- Añadir CI: tests unitarios e integración (GitHub Actions)
+	- Descripción: Pipeline minimal que ejecuta `npm install` y corre la suite de tests en Node 18+.
+	- Criterios de aceptación:
+		- Job `test` en `.github/workflows/test.yml` que corre `npx ts-node tests/crearTransaccion.test.ts` o el runner de tests elegido.
+		- Pipeline que falla si los tests fallan.
