@@ -1,9 +1,8 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { PrismaClient } from "@prisma/client";
-import { z } from "zod";
+import { z, ZodError } from "zod";
 import { crearTransaccion } from "./services/transaccion";
-import { z } from "zod";
 
 const app = Fastify({ logger: true });
 const prisma = new PrismaClient();
@@ -42,8 +41,8 @@ app.post("/api/v1/gastos", async (request, reply) => {
     return reply.code(201).send(resultado);
   } catch (error) {
     request.log.error(error);
-    if (error && error.name === "ZodError") {
-      return reply.code(400).send({ error: (error as any).errors });
+    if (error instanceof ZodError) {
+      return reply.code(400).send({ error: error.errors });
     }
     return reply.code(500).send({ error: "Internal error" });
   }
