@@ -1,0 +1,12 @@
+# Node
+node_modules/
+.env
+.DS_Store
+
+# VS Code
+.vscode/
+
+# macOS
+*.swp
+*.swo
+*.DS_Store
