@@ -12,6 +12,20 @@ jobs:
     strategy:
       matrix:
         node-version: [18.x, 20.x]
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: finances_dev
+        ports:
+          - 5432:5432
+        options: >
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
       - name: Use Node.js ${{ matrix.node-version }}
@@ -26,9 +40,15 @@ jobs:
         run: |
           cd backend
           npx prisma generate
+      - name: Apply database migrations
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/finances_dev
+        run: |
+          cd backend
+          npx prisma migrate deploy
       - name: Run tests
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/finances_dev
         run: |
           cd backend
           npm test
