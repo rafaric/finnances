@@ -42,22 +42,37 @@
 - [ ] Verificar reglas de tarjetas, confirmación y doble conteo.
 - [ ] Configurar CI básica y herramientas de lint/format.
 
-## Prioridad de primer sprint
+## Estado del Sprint 1
 
--1. Definir schema de datos e implementar migraciones.
-	- Criterios de aceptación:
-		- La operación es idempotente por `idempotencyKey`.
-		- Todos los cambios relacionados (transaccion, asociacion de cuota, ajuste de cuentas/transferencias) se aplican en una única transacción DB atómica.
-		- Existe test de integración que demuestra idempotencia y ajuste de balance: `tests/crearTransaccion.test.ts`.
-		- PR revisado y mergeado en `main` (https://github.com/rafaric/finnances/pull/7).
-		- Política de balances: `saldoInicial` es inmutable y solo carga al alta; no se crea `saldoActual` persistido por ahora.
-2. Implementar `crearTransaccion()` con idempotencia y cálculo de saldo. [COMPLETADO]
-3. Implementar `POST /api/v1/gastos` y validación básica. [COMPLETADO]
-4. Implementar formulario básico de nuevo gasto e inicio de la PWA.
-5. Agregar tests unitarios para creación de transacciones y cálculo de saldo. [COMPLETADO]
-6. Añadir CI básica y pipeline de tests. [COMPLETADO]
+Sprint 1 completado en backend:
+- Definición del esquema y migraciones.
+- Lógica de dominio `crearTransaccion()` con idempotencia y balance derivado.
+- Endpoint `POST /api/v1/gastos` con validación básica.
+- Tests de integración/unitarios y CI configurado.
+- Merge a `main` realizado en https://github.com/rafaric/finnances/pull/11.
 
-> PR mergeado en `main`: https://github.com/rafaric/finnances/pull/11
+## Prioridad Sprint 2
+
+1. Implementar `POST /api/v1/gastos/ocr` con manejo de fallos y estado `PENDIENTE_REVISION`.
+	- Valida la entrada OCR/IA y no genera 500s por datos incompletos.
+	- Crea transacciones provisionales con estado `PENDIENTE_REVISION` cuando no se puede confirmar automáticamente.
+	- Permite corrección posterior sin duplicar la operación.
+
+2. Implementar `POST /api/v1/transferencias`.
+	- Ajusta ambos saldos en una transacción DB atómica.
+	- Registra la transferencia y genera la transacción asociada con idempotencia.
+
+3. Implementar `POST /api/v1/transacciones/:id/categoria`.
+	- Reasigna categoría sin romper la idempotencia original.
+	- Valida existencia y pertenencia de la transacción.
+
+4. Iniciar la UI PWA de nuevo gasto y listado de movimientos.
+	- Crear pantalla de onboarding de gasto con monto, cuenta, categoría y fecha.
+	- Mostrar movimientos recientes con estado y saldo calculado.
+
+5. Documentar API y reglas de balance en `docs/04-api-y-arquitectura-tecnica.md`.
+	- Explicar `saldoInicial + movimientos` como fuente única de verdad.
+	- Definir contratos de los endpoints implementados.
 
 ## Próximas tareas (alta prioridad)
 
