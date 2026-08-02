@@ -46,6 +46,13 @@ Queda fuera de la v1:
    - `saldo(cuenta)` derivado.
    - `reconciliarResumen()` y reglas de doble conteo.
    - generación de proyecciones de recurrentes.
+ 
+### Decisión: política de balance (saldo)
+
+- `saldoInicial` se mantiene como campo inmutable que se carga al alta de la cuenta.
+- No se introduce `saldoActual` persistido por ahora; el balance mostrado en UI se calcula con una función `calcularSaldo()` que parte de `saldoInicial` y suma los movimientos aplicables.
+- Si en el futuro se decide cachear el balance por performance, se añadirá `saldoActual` como campo desnormalizado que SOLO se actualizará automáticamente dentro de la misma transacción DB que crea el movimiento (no editable por usuarios ni endpoints externos).
+
 4. Validación de modelos con Zod o esquema equivalente.
 
 ### Fase 2 — API y lógica de negocio

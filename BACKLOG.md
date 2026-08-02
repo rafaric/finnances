@@ -44,8 +44,14 @@
 
 ## Prioridad de primer sprint
 
-1. Definir schema de datos e implementar migraciones.
-2. Implementar `crearTransaccion()` con idempotencia y cálculo de saldo.
+-1. Definir schema de datos e implementar migraciones.
+	- Criterios de aceptación:
+		- La operación es idempotente por `idempotencyKey`.
+		- Todos los cambios relacionados (transaccion, asociacion de cuota, ajuste de cuentas/transferencias) se aplican en una única transacción DB atómica.
+		- Existe test de integración que demuestra idempotencia y ajuste de balance: `tests/crearTransaccion.test.ts`.
+		- PR revisado y mergeado en `main` (https://github.com/rafaric/finnances/pull/7).
+		- Política de balances: `saldoInicial` es inmutable y solo carga al alta; no se crea `saldoActual` persistido por ahora.
+2. Implementar `crearTransaccion()` con idempotencia y cálculo de saldo. [COMPLETADO]
 3. Implementar `POST /api/v1/gastos` y validación básica.
 4. Implementar formulario básico de nuevo gasto e inicio de la PWA.
-5. Agregar tests unitarios para creación de transacciones y cálculo de saldo.
+5. Agregar tests unitarios para creación de transacciones y cálculo de saldo. [COMPLETADO]
