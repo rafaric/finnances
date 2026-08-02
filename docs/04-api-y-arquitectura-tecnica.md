@@ -8,6 +8,7 @@ aunque sí converjan en una única función de negocio.
 ```
 POST /api/v1/gastos                → Apple Pay + Manual (dato ya estructurado)
 POST /api/v1/gastos/ocr            → recibe texto crudo de Live Text, llama IA, estructura
+PATCH /api/v1/gastos/ocr/:id/corregir → corrige un gasto OCR pendiente y lo confirma si queda completo
 POST /api/v1/resumenes/ocr         → ingesta de resumen de tarjeta (texto de PDF/mail/captura)
 POST /api/v1/transferencias        → movimiento entre cuentas propias
 POST /api/v1/recurrentes/:id/confirmar   → confirma InstanciaGastoRecurrente
@@ -102,6 +103,24 @@ app.post('/api/v1/gastos/ocr', async (req, res) => {
 
 Prompt al modelo: exigir explícitamente "SOLO JSON, sin texto adicional,
 sin backticks". Envolver siempre el `JSON.parse()` en try/catch.
+
+### 4.1 Flujo de corrección de OCR pendiente
+
+Cuando el parser OCR detecta el monto pero no puede inferir una categoría, la
+transacción se guarda como `PENDIENTE_CATEGORIA` en lugar de `PENDIENTE_REVISION`.
+Ese estado indica que hay suficiente información para crear el gasto, pero falta
+la clasificación correcta de negocio.
+
+- `POST /api/v1/gastos/ocr` crea el movimiento OCR.
+- Si falta categoría y el monto está presente, devuelve `202 Accepted` con
+  `estado: PENDIENTE_CATEGORIA`.
+- El cliente debe corregir la categoría mediante:
+  `PATCH /api/v1/gastos/ocr/:id/corregir`.
+- Cuando la corrección aporta `categoria` válida, el backend actualiza el
+  registro, confirma la transacción y ajusta el saldo de la cuenta.
+
+Esto permite separar el reconocimiento de texto del paso de clasificación, con un
+workflow claro para la UX de revisión de gastos.
 
 ## 5. Web Push
 
