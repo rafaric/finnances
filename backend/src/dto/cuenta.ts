@@ -1,4 +1,4 @@
-import type { Cuenta } from "@prisma/client";
+import type { Cuenta, TipoCuenta } from "@prisma/client";
 
 export interface CuentaResumenDTO {
   id: string;
@@ -14,5 +14,40 @@ export function toCuentaResumenDTO(
     id: cuenta.id,
     nombre: cuenta.nombre,
     saldoActual: saldoCalculado,
+  };
+}
+
+export interface CuentaResponseDTO {
+  id: string;
+  nombre: string;
+  tipo: TipoCuenta;
+  banco?: string;
+  ultimosDigitos?: string;
+  colorIdentificador?: string;
+  saldoInicial: number;
+  saldoActual: number;
+  diaCierre?: number;
+  diaPago?: number;
+}
+
+export function toCuentaDTO(
+  cuenta: Pick<
+    Cuenta,
+    | "id" | "nombre" | "tipo" | "banco" | "ultimosDigitos"
+    | "colorIdentificador" | "saldoInicial" | "diaCierre" | "diaPago"
+  >,
+  saldoCalculado: number,
+): CuentaResponseDTO {
+  return {
+    id: cuenta.id,
+    nombre: cuenta.nombre,
+    tipo: cuenta.tipo,
+    banco: cuenta.banco ?? undefined,
+    ultimosDigitos: cuenta.ultimosDigitos ?? undefined,
+    colorIdentificador: cuenta.colorIdentificador ?? undefined,
+    saldoInicial: Number(cuenta.saldoInicial),
+    saldoActual: saldoCalculado,
+    diaCierre: cuenta.diaCierre ?? undefined,
+    diaPago: cuenta.diaPago ?? undefined,
   };
 }
