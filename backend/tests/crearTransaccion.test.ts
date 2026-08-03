@@ -1,14 +1,35 @@
 import { PrismaClient } from "@prisma/client";
-import { crearTransaccion } from "../src/services/transaccion";
+import {
+  crearTransaccion,
+  normalizarMontoGasto,
+} from "../src/services/transaccion";
 import { calcularSaldo } from "../src/services/saldo";
 
 async function run() {
   const prisma = new PrismaClient();
   try {
+    if (normalizarMontoGasto("150") !== "-150.00") {
+      throw new Error("Expected positive expense input to normalize to -150.00");
+    }
+    if (normalizarMontoGasto("-150") !== "-150.00") {
+      throw new Error("Expected negative expense input to remain negative");
+    }
+    if (normalizarMontoGasto("1.234,56") !== "-1234.56") {
+      throw new Error("Expected Argentine amount format to normalize correctly");
+    }
+    try {
+      normalizarMontoGasto("0");
+      throw new Error("Expected zero expense input to be rejected");
+    } catch (error) {
+      if (!(error instanceof Error) || error.message !== "Monto inválido") {
+        throw error;
+      }
+    }
+
     const key = "test-key-" + Date.now();
     // Create a test account
     const cuenta = await prisma.cuenta.create({
-      data: { nombre: "Cuenta Test", tipo: "EFECTIVO", saldoInicial: "0" },
+      data: { nombre: "Cuenta Test", tipo: "EFECTIVO", saldoInicial: "500" },
     });
 
     const input = {
@@ -33,10 +54,13 @@ async function run() {
     console.log("saldoInicial after:", cuentaAfter?.saldoInicial.toString());
     console.log("saldo calculado:", saldo);
 
-    if (cuentaAfter?.saldoInicial.toString() !== "0") {
+    if (cuentaAfter?.saldoInicial.toString() !== "500") {
       throw new Error("Expected saldoInicial to remain immutable");
     }
-    if (saldo !== 100) {
+    if (first.monto.toString() !== "-100") {
+      throw new Error("Expected expense monto to be persisted as negative");
+    }
+    if (saldo !== 400) {
       throw new Error("Expected calculated saldo to reflect the transaction");
     }
   } finally {

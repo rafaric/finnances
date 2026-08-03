@@ -90,11 +90,11 @@ async function run() {
     if (res.statusCode !== 201) throw new Error(`POST /gastos: expected 201, got ${res.statusCode} — ${res.body}`);
     const body = res.json();
     assertTransaccionShape(body);
-    if (body.monto !== 150) throw new Error(`monto should be 150, got ${body.monto}`);
+    if (body.monto !== -150) throw new Error(`monto should be -150, got ${body.monto}`);
     if (body.moneda !== "ARS") throw new Error("moneda should be ARS");
     if (body.categoria !== "COMIDA") throw new Error("categoria mismatch");
     if (body.estado !== "CONFIRMADA") throw new Error("estado should be CONFIRMADA");
-    if (body.cuenta.saldoActual !== 650) throw new Error(`saldoActual should be 650, got ${body.cuenta.saldoActual}`);
+    if (body.cuenta.saldoActual !== 350) throw new Error(`saldoActual should be 350, got ${body.cuenta.saldoActual}`);
     console.log("✓ POST /api/v1/gastos — TransaccionResponseDTO shape + values");
   }
 

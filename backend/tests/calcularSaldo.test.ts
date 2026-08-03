@@ -5,9 +5,9 @@ import { calcularSaldo } from "../src/services/saldo";
 async function run() {
   const prisma = new PrismaClient();
   try {
-    // Create a test account with saldoInicial 100
+    // Create a test account with saldoInicial 500
     const cuenta = await prisma.cuenta.create({
-      data: { nombre: "Cuenta Saldo", tipo: "EFECTIVO", saldoInicial: "100" },
+      data: { nombre: "Cuenta Saldo", tipo: "EFECTIVO", saldoInicial: "500" },
     });
 
     const key1 = "saldo-key-1-" + Date.now();
@@ -31,12 +31,12 @@ async function run() {
 
     const saldo = await calcularSaldo(prisma, cuenta.id);
     console.log("calculated saldo:", saldo);
-    if (saldo !== 130) {
+    if (saldo !== 430) {
       throw new Error("Expected saldo to be saldoInicial + transacciones confirmadas");
     }
 
     const cuentaAfter = await prisma.cuenta.findUnique({ where: { id: cuenta.id } });
-    if (cuentaAfter?.saldoInicial.toString() !== "100") {
+    if (cuentaAfter?.saldoInicial.toString() !== "500") {
       throw new Error("Expected saldoInicial to remain unchanged");
     }
   } finally {

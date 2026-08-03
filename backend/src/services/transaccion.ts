@@ -48,13 +48,40 @@ function normalizeAmount(
   if (value == null) return undefined;
   if (typeof value === "number") return value.toFixed(2);
 
-  const cleaned = value
-    .trim()
-    .replace(/[^\d,.-]/g, "")
-    .replace(/\.(?=.*\.)/g, "")
-    .replace(/,/g, ".");
-  const match = cleaned.match(/-?\d+(?:\.\d{1,2})?/);
-  return match ? Number(match[0]).toFixed(2) : undefined;
+  const cleaned = value.trim().replace(/[^\d,.-]/g, "");
+  if (!cleaned || !/^-?[\d.,]+$/.test(cleaned)) return undefined;
+
+  const sign = cleaned.startsWith("-") ? "-" : "";
+  const unsigned = cleaned.replace(/^-/, "");
+  const lastComma = unsigned.lastIndexOf(",");
+  const lastDot = unsigned.lastIndexOf(".");
+  const decimalSeparator =
+    lastComma === -1
+      ? lastDot
+      : lastDot === -1
+        ? lastComma
+        : Math.max(lastComma, lastDot);
+  const decimalDigits =
+    decimalSeparator === -1 ? 0 : unsigned.length - decimalSeparator - 1;
+  const hasDecimalPart = decimalSeparator !== -1 && decimalDigits <= 2;
+  const integerPart = hasDecimalPart
+    ? unsigned.slice(0, decimalSeparator)
+    : unsigned;
+  const fractionPart = hasDecimalPart
+    ? unsigned.slice(decimalSeparator + 1)
+    : "";
+  const normalized = `${sign}${integerPart.replace(/[.,]/g, "")}.${fractionPart}`;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed.toFixed(2) : undefined;
+}
+
+export function normalizarMontoGasto(value: string | number): string {
+  const normalized = normalizeAmount(value);
+  if (normalized == null || Number(normalized) === 0) {
+    throw new Error("Monto inválido");
+  }
+
+  return (-Math.abs(Number(normalized))).toFixed(2);
 }
 
 function extractCurrencyAmount(text: string): string | undefined {
@@ -194,10 +221,18 @@ export async function crearTransaccion(
   });
   if (existing) return existing as Transaccion;
 
+  const estado = data.estado ?? EstadoTransaccion.CONFIRMADA;
+  const monto =
+    estado === EstadoTransaccion.CONFIRMADA
+      ? normalizarMontoGasto(data.monto)
+      : Number(data.monto) === 0
+        ? "0.00"
+        : normalizarMontoGasto(data.monto);
+
   const result = await prisma.$transaction(async (tx) => {
     const created = await tx.transaccion.create({
       data: {
-        monto: typeof data.monto === "string" ? data.monto : String(data.monto),
+        monto,
         moneda: "ARS",
         origen: data.origen,
         cuentaId: data.cuentaId,
@@ -205,7 +240,7 @@ export async function crearTransaccion(
         idempotencyKey: data.idempotencyKey,
         comercio: data.comercio,
         fecha: data.fecha ? new Date(data.fecha) : new Date(),
-        estado: data.estado ?? EstadoTransaccion.CONFIRMADA,
+        estado,
         textoCrudoOCR: data.textoCrudoOCR,
       },
     });
@@ -326,11 +361,10 @@ export async function corregirTransaccionOCR(
 
   const normalizedMonto =
     data.monto !== undefined
-      ? normalizeAmount(data.monto)
-      : transaccion.monto.toString();
-  if (data.monto !== undefined && normalizedMonto == null) {
-    throw new Error("Monto inválido");
-  }
+      ? normalizarMontoGasto(data.monto)
+      : Number(transaccion.monto) !== 0
+        ? normalizarMontoGasto(transaccion.monto.toString())
+        : "0.00";
 
   let fecha = transaccion.fecha;
   if (data.fecha) {
@@ -340,7 +374,7 @@ export async function corregirTransaccionOCR(
   }
 
   const updatedCategoria = data.categoria ?? transaccion.categoria;
-  const shouldConfirm = Boolean(normalizedMonto && updatedCategoria);
+  const shouldConfirm = Number(normalizedMonto) !== 0 && Boolean(updatedCategoria);
 
   const updated = await prisma.$transaction(async (tx) => {
     return tx.transaccion.update({
@@ -385,6 +419,10 @@ export async function resolverCategoriaPendienteTransaccion(
     throw new Error(
       "Solo se pueden resolver transacciones con categoria pendiente",
     );
+  }
+
+  if (Number(transaccion.monto) === 0) {
+    throw new Error("Monto inválido");
   }
 
   let fecha = transaccion.fecha;

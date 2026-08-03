@@ -63,7 +63,7 @@ async function run() {
     if (cuentaAfter.saldoInicial.toString() !== "0") {
       throw new Error("Expected saldoInicial to remain immutable after resolve");
     }
-    if (saldo !== 100) {
+    if (saldo !== -100) {
       throw new Error(
         "Expected calculated saldo to include resolved pending category transaction",
       );

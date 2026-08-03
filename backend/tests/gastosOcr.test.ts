@@ -54,7 +54,10 @@ async function run() {
     if (corrected.estado !== "CONFIRMADA") {
       throw new Error("Expected corrected OCR transaction to be CONFIRMADA");
     }
-    if (corrected.monto.toString() !== "200") {
+    if (confirmed.monto.toString() !== "-150") {
+      throw new Error("Expected confirmed OCR monto to be negative");
+    }
+    if (corrected.monto.toString() !== "-200") {
       throw new Error("Expected corrected OCR transaction monto to be 200");
     }
 
@@ -70,7 +73,7 @@ async function run() {
     if (cuentaAfter?.saldoInicial.toString() !== "0") {
       throw new Error("Expected saldoInicial to remain immutable after OCR flow");
     }
-    if (saldo !== 350) {
+    if (saldo !== -350) {
       throw new Error(
         "Expected calculated saldo to reflect confirmed and corrected OCR transactions",
       );
