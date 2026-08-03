@@ -135,8 +135,6 @@ model Transaccion {
   estado                   EstadoTransaccion         @default(CONFIRMADA)
   idempotencyKey           String                    @unique
   textoCrudoOCR            String?
-  transferenciaFondeoId    String?                   @unique
-  transferenciaFondeo      TransferenciaInterna?     @relation("TransferenciaFondeo", fields: [transferenciaFondeoId], references: [id])
   createdAt                DateTime                  @default(now())
   cuota                    Cuota?                    @relation("TransaccionCuota")
   instanciaGastoRecurrente InstanciaGastoRecurrente? @relation("TransaccionInstanciaRecurrente")
@@ -232,10 +230,10 @@ model TransferenciaInterna {
   cuentaDestinoId String
   cuentaDestino   Cuenta       @relation("TransferDestino", fields: [cuentaDestinoId], references: [id])
   monto           Decimal      @db.Decimal(10, 2)
+  idempotencyKey  String       @unique
   fecha           DateTime     @default(now())
   nota            String?      @db.VarChar(60)
   createdAt       DateTime     @default(now())
-  transaccion     Transaccion? @relation("TransferenciaFondeo")
 }
 
 model ContactoCategoria {

@@ -6,14 +6,14 @@
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "build": "tsc -p tsconfig.json",
-    "test": "npm run build && ts-node tests/crearTransaccion.test.ts && ts-node tests/calcularSaldo.test.ts && ts-node tests/gastosOcr.test.ts && ts-node tests/gastosCategoriaPendiente.test.ts && ts-node tests/transferenciasInternas.test.ts && ts-node tests/resumenesOcr.test.ts",
+    "test": "npm run build && ts-node tests/crearTransaccion.test.ts && ts-node tests/calcularSaldo.test.ts && ts-node tests/gastosOcr.test.ts && ts-node tests/gastosCategoriaPendiente.test.ts && ts-node tests/transferenciasInternas.test.ts && ts-node tests/resumenesOcr.test.ts && ts-node tests/http.test.ts",
     "start": "node dist/index.js",
     "prisma": "prisma"
   },
   "dependencies": {
     "@fastify/cors": "^11.3.0",
     "@prisma/client": "^5.15.0",
-    "fastify": "^4.23.0",
+    "fastify": "^5.11.2",
     "zod": "^3.24.1"
   },
   "devDependencies": {

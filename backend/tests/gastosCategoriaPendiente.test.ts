@@ -3,6 +3,7 @@ import {
   crearTransaccionOCR,
   resolverCategoriaPendienteTransaccion,
 } from "../src/services/transaccion";
+import { calcularSaldo } from "../src/services/saldo";
 
 async function run() {
   const prisma = new PrismaClient();
@@ -52,14 +53,19 @@ async function run() {
       where: { id: cuenta.id },
     });
     if (!cuentaAfter) throw new Error("Expected account to exist");
+    const saldo = await calcularSaldo(prisma, cuenta.id);
 
     console.log(
       "saldoInicial after resolve:",
       cuentaAfter.saldoInicial.toString(),
     );
-    if (cuentaAfter.saldoInicial.toString() !== "100") {
+    console.log("saldo calculado after resolve:", saldo);
+    if (cuentaAfter.saldoInicial.toString() !== "0") {
+      throw new Error("Expected saldoInicial to remain immutable after resolve");
+    }
+    if (saldo !== 100) {
       throw new Error(
-        "Expected account saldoInicial to update after resolving category",
+        "Expected calculated saldo to include resolved pending category transaction",
       );
     }
   } finally {

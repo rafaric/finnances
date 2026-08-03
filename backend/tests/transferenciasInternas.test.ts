@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { crearTransferenciaInterna } from "../src/services/transaccion";
+import { calcularSaldo } from "../src/services/saldo";
 
 async function run() {
   const prisma = new PrismaClient();
@@ -22,9 +23,9 @@ async function run() {
     });
 
     console.log("transferencia created id:", transferencia.id);
-    if (transferencia.cuentaId !== origen.id) {
+    if (transferencia.cuentaOrigenId !== origen.id) {
       throw new Error(
-        "Expected transferencia transaccion cuentaId to be origen",
+        "Expected transferencia cuentaOrigenId to match origen",
       );
     }
     if (transferencia.monto.toString() !== "150") {
@@ -40,11 +41,28 @@ async function run() {
     if (!origenAfter || !destinoAfter) {
       throw new Error("Expected both accounts to exist after transfer");
     }
-    if (origenAfter.saldoInicial.toString() !== "850") {
-      throw new Error("Expected origen balance to decrease by 150");
+    const [saldoOrigen, saldoDestino] = await Promise.all([
+      calcularSaldo(prisma, origen.id),
+      calcularSaldo(prisma, destino.id),
+    ]);
+    const transacciones = await prisma.transaccion.findMany({
+      where: { idempotencyKey },
+    });
+
+    if (origenAfter.saldoInicial.toString() !== "1000") {
+      throw new Error("Expected origen saldoInicial to remain unchanged");
     }
-    if (destinoAfter.saldoInicial.toString() !== "350") {
-      throw new Error("Expected destino balance to increase by 150");
+    if (destinoAfter.saldoInicial.toString() !== "200") {
+      throw new Error("Expected destino saldoInicial to remain unchanged");
+    }
+    if (saldoOrigen !== 850) {
+      throw new Error("Expected calculated origen saldo to decrease by 150");
+    }
+    if (saldoDestino !== 350) {
+      throw new Error("Expected calculated destino saldo to increase by 150");
+    }
+    if (transacciones.length !== 0) {
+      throw new Error("Expected internal transfers to avoid creating Transaccion records");
     }
   } finally {
     await prisma.$disconnect();

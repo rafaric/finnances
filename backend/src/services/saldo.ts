@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { EstadoTransaccion, PrismaClient } from "@prisma/client";
 
 export async function calcularSaldo(
   prisma: PrismaClient,
@@ -7,15 +7,37 @@ export async function calcularSaldo(
   const cuenta = await prisma.cuenta.findUnique({ where: { id: cuentaId } });
   if (!cuenta) throw new Error("Cuenta no encontrada");
 
-  const transacciones = await prisma.transaccion.findMany({
-    where: { cuentaId },
-  });
+  const [transacciones, transferenciasSalientes, transferenciasEntrantes] =
+    await Promise.all([
+      prisma.transaccion.findMany({
+        where: { cuentaId, estado: EstadoTransaccion.CONFIRMADA },
+      }),
+      prisma.transferenciaInterna.findMany({
+        where: { cuentaOrigenId: cuentaId },
+      }),
+      prisma.transferenciaInterna.findMany({
+        where: { cuentaDestinoId: cuentaId },
+      }),
+    ]);
 
   const movimientosSum = transacciones.reduce((acc, t) => {
     return acc + Number(t.monto);
   }, 0);
 
-  return Number(cuenta.saldoInicial) + movimientosSum;
+  const transferenciasSalientesSum = transferenciasSalientes.reduce((acc, t) => {
+    return acc + Number(t.monto);
+  }, 0);
+
+  const transferenciasEntrantesSum = transferenciasEntrantes.reduce((acc, t) => {
+    return acc + Number(t.monto);
+  }, 0);
+
+  return (
+    Number(cuenta.saldoInicial) +
+    movimientosSum -
+    transferenciasSalientesSum +
+    transferenciasEntrantesSum
+  );
 }
 
 export default calcularSaldo;

@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { crearTransaccion } from "../src/services/transaccion";
+import { calcularSaldo } from "../src/services/saldo";
 
 async function run() {
   const prisma = new PrismaClient();
@@ -28,7 +29,16 @@ async function run() {
     const cuentaAfter = await prisma.cuenta.findUnique({
       where: { id: cuenta.id },
     });
+    const saldo = await calcularSaldo(prisma, cuenta.id);
     console.log("saldoInicial after:", cuentaAfter?.saldoInicial.toString());
+    console.log("saldo calculado:", saldo);
+
+    if (cuentaAfter?.saldoInicial.toString() !== "0") {
+      throw new Error("Expected saldoInicial to remain immutable");
+    }
+    if (saldo !== 100) {
+      throw new Error("Expected calculated saldo to reflect the transaction");
+    }
   } finally {
     await prisma.$disconnect();
   }

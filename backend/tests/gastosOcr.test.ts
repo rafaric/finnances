@@ -1,9 +1,9 @@
 import { PrismaClient } from "@prisma/client";
 import {
   crearTransaccionOCR,
-  crearTransaccion,
   corregirTransaccionOCR,
 } from "../src/services/transaccion";
+import { calcularSaldo } from "../src/services/saldo";
 
 async function run() {
   const prisma = new PrismaClient();
@@ -61,13 +61,18 @@ async function run() {
     const cuentaAfter = await prisma.cuenta.findUnique({
       where: { id: cuenta.id },
     });
+    const saldo = await calcularSaldo(prisma, cuenta.id);
     console.log(
       "saldoInicial after correction:",
       cuentaAfter?.saldoInicial.toString(),
     );
-    if (cuentaAfter?.saldoInicial.toString() !== "350") {
+    console.log("saldo calculado after correction:", saldo);
+    if (cuentaAfter?.saldoInicial.toString() !== "0") {
+      throw new Error("Expected saldoInicial to remain immutable after OCR flow");
+    }
+    if (saldo !== 350) {
       throw new Error(
-        "Expected account balance to reflect corrected OCR transaction",
+        "Expected calculated saldo to reflect confirmed and corrected OCR transactions",
       );
     }
   } finally {

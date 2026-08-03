@@ -1,6 +1,8 @@
 import {
+  Prisma,
   PrismaClient,
   Transaccion,
+  Resumen,
   Categoria,
   OrigenTransaccion,
   EstadoTransaccion,
@@ -16,7 +18,6 @@ const TransaccionSchema = z.object({
   fecha: z.string().optional(),
   comercio: z.string().optional(),
   cuotaId: z.string().optional(),
-  transferenciaInternaId: z.string().optional(),
   estado: z.nativeEnum(EstadoTransaccion).optional(),
   textoCrudoOCR: z.string().optional(),
 });
@@ -204,60 +205,15 @@ export async function crearTransaccion(
         idempotencyKey: data.idempotencyKey,
         comercio: data.comercio,
         fecha: data.fecha ? new Date(data.fecha) : new Date(),
-        transferenciaFondeoId: data.transferenciaInternaId,
         estado: data.estado ?? EstadoTransaccion.CONFIRMADA,
         textoCrudoOCR: data.textoCrudoOCR,
       },
     });
 
-    const shouldApplyBalance = created.estado === EstadoTransaccion.CONFIRMADA;
-
-    if (shouldApplyBalance && data.transferenciaInternaId) {
-      const transferencia = await tx.transferenciaInterna.findUnique({
-        where: { id: data.transferenciaInternaId },
-      });
-      if (transferencia) {
-        const origenCuenta = await tx.cuenta.findUnique({
-          where: { id: transferencia.cuentaOrigenId },
-        });
-        const destinoCuenta = await tx.cuenta.findUnique({
-          where: { id: transferencia.cuentaDestinoId },
-        });
-        if (origenCuenta && destinoCuenta) {
-          await tx.cuenta.update({
-            where: { id: transferencia.cuentaOrigenId },
-            data: {
-              saldoInicial: origenCuenta.saldoInicial.minus(
-                Number(data.monto),
-              ) as any,
-            },
-          });
-          await tx.cuenta.update({
-            where: { id: transferencia.cuentaDestinoId },
-            data: {
-              saldoInicial: destinoCuenta.saldoInicial.plus(
-                Number(data.monto),
-              ) as any,
-            },
-          });
-        }
-      }
-    } else if (shouldApplyBalance) {
-      const cuenta = await tx.cuenta.findUnique({
-        where: { id: data.cuentaId },
-      });
-      if (cuenta) {
-        await tx.cuenta.update({
-          where: { id: data.cuentaId },
-          data: {
-            saldoInicial: cuenta.saldoInicial.plus(Number(data.monto)) as any,
-            saldoActualizadoEn: new Date(),
-          },
-        });
-      }
-    }
-
-    if (shouldApplyBalance && data.cuotaId) {
+    if (
+      created.estado === EstadoTransaccion.CONFIRMADA &&
+      data.cuotaId
+    ) {
       await tx.cuota.update({
         where: { id: data.cuotaId },
         data: { transaccionId: created.id, estado: "CONFIRMADO" },
@@ -292,15 +248,21 @@ export type CrearTransferenciaInternaInput = z.infer<
   typeof TransferenciaInternaSchema
 >;
 
+export type TransferenciaInternaConCuentas =
+  Prisma.TransferenciaInternaGetPayload<{
+    include: { cuentaOrigen: true; cuentaDestino: true };
+  }>;
+
 export async function crearTransferenciaInterna(
   prisma: PrismaClient,
   input: CrearTransferenciaInternaInput,
-): Promise<Transaccion> {
+): Promise<TransferenciaInternaConCuentas> {
   const data = TransferenciaInternaSchema.parse(input);
-  const existing = await prisma.transaccion.findUnique({
+  const existing = await prisma.transferenciaInterna.findUnique({
     where: { idempotencyKey: data.idempotencyKey },
+    include: { cuentaOrigen: true, cuentaDestino: true },
   });
-  if (existing) return existing as Transaccion;
+  if (existing) return existing;
 
   const parsedFecha = data.fecha ? parseDateValue(data.fecha) : undefined;
   if (data.fecha && !parsedFecha) {
@@ -328,45 +290,14 @@ export async function crearTransferenciaInterna(
         cuentaOrigenId: data.cuentaOrigenId,
         cuentaDestinoId: data.cuentaDestinoId,
         monto: typeof data.monto === "string" ? data.monto : String(data.monto),
+        idempotencyKey: data.idempotencyKey,
         nota: data.nota,
         fecha: parsedFecha ? new Date(parsedFecha) : undefined,
       },
+      include: { cuentaOrigen: true, cuentaDestino: true },
     });
 
-    const transaccion = await tx.transaccion.create({
-      data: {
-        monto: typeof data.monto === "string" ? data.monto : String(data.monto),
-        moneda: "ARS",
-        origen: OrigenTransaccion.MANUAL,
-        cuentaId: data.cuentaOrigenId,
-        categoria: Categoria.OTROS,
-        idempotencyKey: data.idempotencyKey,
-        comercio: "Transferencia interna",
-        fecha: parsedFecha ? new Date(parsedFecha) : new Date(),
-        transferenciaFondeoId: transferencia.id,
-        estado: EstadoTransaccion.CONFIRMADA,
-      },
-    });
-
-    await tx.cuenta.update({
-      where: { id: data.cuentaOrigenId },
-      data: {
-        saldoInicial: origenCuenta.saldoInicial.minus(
-          Number(data.monto),
-        ) as any,
-      },
-    });
-
-    await tx.cuenta.update({
-      where: { id: data.cuentaDestinoId },
-      data: {
-        saldoInicial: destinoCuenta.saldoInicial.plus(
-          Number(data.monto),
-        ) as any,
-      },
-    });
-
-    return transaccion;
+    return transferencia;
   });
 
   return result;
@@ -412,7 +343,7 @@ export async function corregirTransaccionOCR(
   const shouldConfirm = Boolean(normalizedMonto && updatedCategoria);
 
   const updated = await prisma.$transaction(async (tx) => {
-    const updatedTransaccion = await tx.transaccion.update({
+    return tx.transaccion.update({
       where: { id: transaccion.id },
       data: {
         monto: normalizedMonto ?? transaccion.monto.toString(),
@@ -424,25 +355,6 @@ export async function corregirTransaccionOCR(
           : EstadoTransaccion.PENDIENTE_REVISION,
       },
     });
-
-    if (shouldConfirm) {
-      const cuenta = await tx.cuenta.findUnique({
-        where: { id: updatedTransaccion.cuentaId },
-      });
-      if (cuenta) {
-        await tx.cuenta.update({
-          where: { id: cuenta.id },
-          data: {
-            saldoInicial: cuenta.saldoInicial.plus(
-              Number(updatedTransaccion.monto),
-            ) as any,
-            saldoActualizadoEn: new Date(),
-          },
-        });
-      }
-    }
-
-    return updatedTransaccion;
   });
 
   return updated;
@@ -483,7 +395,7 @@ export async function resolverCategoriaPendienteTransaccion(
   }
 
   const updated = await prisma.$transaction(async (tx) => {
-    const updatedTransaccion = await tx.transaccion.update({
+    return tx.transaccion.update({
       where: { id: transaccion.id },
       data: {
         categoria: data.categoria,
@@ -492,23 +404,6 @@ export async function resolverCategoriaPendienteTransaccion(
         estado: EstadoTransaccion.CONFIRMADA,
       },
     });
-
-    const cuenta = await tx.cuenta.findUnique({
-      where: { id: updatedTransaccion.cuentaId },
-    });
-    if (cuenta) {
-      await tx.cuenta.update({
-        where: { id: cuenta.id },
-        data: {
-          saldoInicial: cuenta.saldoInicial.plus(
-            Number(updatedTransaccion.monto),
-          ) as any,
-          saldoActualizadoEn: new Date(),
-        },
-      });
-    }
-
-    return updatedTransaccion;
   });
 
   return updated;
@@ -551,7 +446,7 @@ export type CrearResumenOCRInput = z.infer<typeof ResumenOCRInput>;
 export async function crearResumenOCR(
   prisma: PrismaClient,
   input: CrearResumenOCRInput,
-): Promise<any> {
+): Promise<Resumen> {
   const data = ResumenOCRInput.parse(input);
 
   // Intent: extraer periodo, monto total y monto minimo del texto

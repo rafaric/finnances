@@ -31,6 +31,14 @@ async function run() {
 
     const saldo = await calcularSaldo(prisma, cuenta.id);
     console.log("calculated saldo:", saldo);
+    if (saldo !== 130) {
+      throw new Error("Expected saldo to be saldoInicial + transacciones confirmadas");
+    }
+
+    const cuentaAfter = await prisma.cuenta.findUnique({ where: { id: cuenta.id } });
+    if (cuentaAfter?.saldoInicial.toString() !== "100") {
+      throw new Error("Expected saldoInicial to remain unchanged");
+    }
   } finally {
     await prisma.$disconnect();
   }
