@@ -140,7 +140,78 @@ async function run() {
     console.log("✓ POST /api/v1/gastos — TransaccionResponseDTO shape + values");
   }
 
-  // 4. POST /api/v1/gastos/ocr — TransaccionResponseDTO with textoCrudoOCR
+  // 5b. GET /api/v1/transacciones — PaginatedResponseDTO shape + filters
+
+  // 5b. GET /api/v1/transacciones — PaginatedResponseDTO shape + filters
+  {
+    // sin filtros — shape de paginación
+    const res = await app.inject({ method: "GET", url: "/api/v1/transacciones", headers: AUTH });
+    if (res.statusCode !== 200) throw new Error(`GET /transacciones: expected 200, got ${res.statusCode}`);
+    const body = res.json();
+    if (!Array.isArray(body.items)) throw new Error("items must be array");
+    if (typeof body.page !== "number") throw new Error("page must be number");
+    if (typeof body.limit !== "number") throw new Error("limit must be number");
+    if (typeof body.total !== "number") throw new Error("total must be number");
+    if (typeof body.hasNextPage !== "boolean") throw new Error("hasNextPage must be boolean");
+    body.items.forEach((t: any) => assertTransaccionShape(t));
+    console.log("✓ GET /api/v1/transacciones — PaginatedResponseDTO shape");
+
+    // filtro por cuentaId
+    const resCuenta = await app.inject({
+      method: "GET", url: `/api/v1/transacciones?cuentaId=${cuenta.id}`, headers: AUTH,
+    });
+    const bodyCuenta = resCuenta.json();
+    if (bodyCuenta.items.some((t: any) => t.cuenta.id !== cuenta.id))
+      throw new Error("cuentaId filter returned wrong transactions");
+    console.log("✓ GET /api/v1/transacciones?cuentaId — filter works");
+
+    // filtro por periodo
+    const periodo = new Date().toISOString().slice(0, 7);
+    const resPeriodo = await app.inject({
+      method: "GET", url: `/api/v1/transacciones?periodo=${periodo}`, headers: AUTH,
+    });
+    if (resPeriodo.statusCode !== 200) throw new Error(`periodo filter: expected 200, got ${resPeriodo.statusCode}`);
+    console.log("✓ GET /api/v1/transacciones?periodo — filter works");
+
+    // filtro por categoria
+    const resCategoria = await app.inject({
+      method: "GET", url: `/api/v1/transacciones?categoria=COMIDA`, headers: AUTH,
+    });
+    const bodyCategoria = resCategoria.json();
+    if (bodyCategoria.items.some((t: any) => t.categoria !== "COMIDA"))
+      throw new Error("categoria filter returned wrong transactions");
+    console.log("✓ GET /api/v1/transacciones?categoria — filter works");
+
+    // filtro por estado
+    const resEstado = await app.inject({
+      method: "GET", url: `/api/v1/transacciones?estado=CONFIRMADA`, headers: AUTH,
+    });
+    const bodyEstado = resEstado.json();
+    if (bodyEstado.items.some((t: any) => t.estado !== "CONFIRMADA"))
+      throw new Error("estado filter returned wrong transactions");
+    console.log("✓ GET /api/v1/transacciones?estado — filter works");
+
+    // paginación
+    const resPage = await app.inject({
+      method: "GET", url: `/api/v1/transacciones?page=1&limit=1`, headers: AUTH,
+    });
+    const bodyPage = resPage.json();
+    if (bodyPage.items.length > 1) throw new Error("limit=1 should return at most 1 item");
+    if (bodyPage.limit !== 1) throw new Error("limit mismatch");
+    if (bodyPage.page !== 1) throw new Error("page mismatch");
+    if (typeof bodyPage.hasNextPage !== "boolean") throw new Error("hasNextPage must be boolean");
+    console.log("✓ GET /api/v1/transacciones?page&limit — pagination works");
+
+    // periodo inválido — BAD_REQUEST
+    const resBad = await app.inject({
+      method: "GET", url: `/api/v1/transacciones?periodo=agosto`, headers: AUTH,
+    });
+    if (resBad.statusCode !== 400) throw new Error(`invalid periodo: expected 400, got ${resBad.statusCode}`);
+    assertErrorShape(resBad.json(), "BAD_REQUEST");
+    console.log("✓ GET /api/v1/transacciones?periodo=invalid — BAD_REQUEST");
+  }
+
+  // 6. POST /api/v1/gastos/ocr — TransaccionResponseDTO with textoCrudoOCR
   let ocrId: string;
   {
     const res = await app.inject({

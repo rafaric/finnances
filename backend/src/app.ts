@@ -1,13 +1,13 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
-import { PrismaClient, Categoria, OrigenTransaccion, type Cuenta, type Transaccion } from "@prisma/client";
+import { PrismaClient, Categoria, OrigenTransaccion, EstadoTransaccion, type Cuenta, type Transaccion } from "@prisma/client";
 import { z, ZodError } from "zod";
 import { toCuentaResumenDTO, toCuentaDTO } from "./dto/cuenta";
 import { toResumenDTO } from "./dto/resumen";
 import { toTransferenciaDTO } from "./dto/transferencia";
 import { toTransaccionDTO } from "./dto/transaccion";
 import { unauthorized, fromZodError, fromDomainError, internalError } from "./dto/error";
-import {
+import { toPaginatedDTO } from "./dto/paginated";import {
   crearTransaccion,
   crearTransaccionOCR,
   corregirTransaccionOCR,
@@ -100,6 +100,50 @@ export function buildApp(prisma: PrismaClient) {
       const dtos = await Promise.all(cuentas.map(toCuentaResponse));
       return reply.send(dtos);
     } catch (error) {
+      if (error instanceof Error) return fromDomainError(reply, error);
+      return internalError(reply);
+    }
+  });
+
+  const TransaccionesQuerySchema = z.object({
+    cuentaId: z.string().optional(),
+    periodo: z.string().regex(/^\d{4}-\d{2}$/).optional(),
+    categoria: z.nativeEnum(Categoria).optional(),
+    estado: z.nativeEnum(EstadoTransaccion).optional(),
+    page: z.coerce.number().int().min(1).default(1),
+    limit: z.coerce.number().int().min(1).max(100).default(20),
+  });
+
+  app.get("/api/v1/transacciones", async (request, reply) => {
+    try {
+      const query = TransaccionesQuerySchema.parse(request.query);
+      const { cuentaId, periodo, categoria, estado, page, limit } = query;
+
+      const where: any = {};
+      if (cuentaId) where.cuentaId = cuentaId;
+      if (categoria) where.categoria = categoria;
+      if (estado) where.estado = estado;
+      if (periodo) {
+        const start = new Date(`${periodo}-01T00:00:00.000Z`);
+        const end = new Date(start);
+        end.setUTCMonth(end.getUTCMonth() + 1);
+        where.fecha = { gte: start, lt: end };
+      }
+
+      const [transacciones, total] = await Promise.all([
+        prisma.transaccion.findMany({
+          where,
+          orderBy: { fecha: "desc" },
+          skip: (page - 1) * limit,
+          take: limit,
+        }),
+        prisma.transaccion.count({ where }),
+      ]);
+
+      const items = await Promise.all(transacciones.map(toTransaccionResponse));
+      return reply.send(toPaginatedDTO(items, page, limit, total));
+    } catch (error) {
+      if (error instanceof ZodError) return fromZodError(reply, error);
       if (error instanceof Error) return fromDomainError(reply, error);
       return internalError(reply);
     }
