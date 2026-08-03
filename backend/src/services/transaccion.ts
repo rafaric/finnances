@@ -539,3 +539,64 @@ export async function crearTransaccionOCR(
     textoCrudoOCR: data.textoCrudo,
   } as CrearTransaccionInput);
 }
+
+const ResumenOCRInput = z.object({
+  textoCrudo: z.string(),
+  cuentaId: z.string(),
+  idempotencyKey: z.string().optional(),
+});
+
+export type CrearResumenOCRInput = z.infer<typeof ResumenOCRInput>;
+
+export async function crearResumenOCR(
+  prisma: PrismaClient,
+  input: CrearResumenOCRInput,
+): Promise<any> {
+  const data = ResumenOCRInput.parse(input);
+
+  // Intent: extraer periodo, monto total y monto minimo del texto
+  const texto = data.textoCrudo;
+
+  const periodoMatch =
+    texto.match(/(\d{4}-\d{2})/) || texto.match(/(\d{2}\/\d{4})/);
+  let periodo: string | undefined = undefined;
+  if (periodoMatch) {
+    const p = periodoMatch[1];
+    if (/\d{4}-\d{2}/.test(p)) periodo = p;
+    else if (/\d{2}\/\d{4}/.test(p)) {
+      const [mm, yyyy] = p.split("/");
+      periodo = `${yyyy}-${mm}`;
+    }
+  }
+
+  const montoTotal = extractCurrencyAmount(texto);
+
+  // buscar monto minimo
+  const minimoMatch = texto.match(/monto\s*minim[oó][:\s]*([\d.,-]+)/i);
+  const montoMinimo = minimoMatch ? normalizeAmount(minimoMatch[1]) : undefined;
+
+  // total consumos
+  const totalConsumos = (() => {
+    const m =
+      texto.match(/consumos(?:\s|:)\s*([\d.,-]+)/i) ||
+      texto.match(/total\s*consumos(?:\s|:)\s*([\d.,-]+)/i);
+    return m ? normalizeAmount(m[1]) : undefined;
+  })();
+
+  const parsedMontoTotal = montoTotal ? Number(montoTotal) : undefined;
+  const parsedMontoMinimo = montoMinimo ? Number(montoMinimo) : undefined;
+  const parsedTotalConsumos = totalConsumos ? Number(totalConsumos) : undefined;
+
+  const created = await prisma.resumen.create({
+    data: {
+      cuentaId: data.cuentaId,
+      periodo: periodo ?? "",
+      montoTotalInformado: parsedMontoTotal ?? 0,
+      montoMinimoInformado: parsedMontoMinimo ?? 0,
+      totalConsumosInformado: parsedTotalConsumos ?? undefined,
+      estado: "PENDIENTE",
+    },
+  });
+
+  return created;
+}

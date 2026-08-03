@@ -7,6 +7,7 @@ import {
   crearTransaccionOCR,
   corregirTransaccionOCR,
   resolverCategoriaPendienteTransaccion,
+  crearResumenOCR,
   crearTransferenciaInterna,
 } from "./services/transaccion";
 
@@ -84,6 +85,12 @@ const TransferenciaSchema = z.object({
   idempotencyKey: z.string(),
 });
 
+const ResumenOCRSchema = z.object({
+  textoCrudo: z.string(),
+  cuentaId: z.string(),
+  idempotencyKey: z.string().optional(),
+});
+
 app.post("/api/v1/gastos/ocr", async (request, reply) => {
   try {
     const data = GastoOCRSchema.parse(request.body);
@@ -122,6 +129,20 @@ app.post("/api/v1/transferencias", async (request, reply) => {
       ].includes(error.message)
     ) {
       return reply.code(400).send({ error: error.message });
+    }
+    return reply.code(500).send({ error: "Internal error" });
+  }
+});
+
+app.post("/api/v1/resumenes/ocr", async (request, reply) => {
+  try {
+    const data = ResumenOCRSchema.parse(request.body);
+    const resultado = await crearResumenOCR(prisma, data);
+    return reply.code(201).send(resultado);
+  } catch (error) {
+    request.log.error(error);
+    if (error instanceof ZodError) {
+      return reply.code(400).send({ error: error.errors });
     }
     return reply.code(500).send({ error: "Internal error" });
   }
