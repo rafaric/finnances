@@ -2,7 +2,7 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { PrismaClient, Categoria, OrigenTransaccion, type Cuenta, type Transaccion } from "@prisma/client";
 import { z, ZodError } from "zod";
-import { toCuentaResumenDTO } from "./dto/cuenta";
+import { toCuentaResumenDTO, toCuentaDTO } from "./dto/cuenta";
 import { toResumenDTO } from "./dto/resumen";
 import { toTransferenciaDTO } from "./dto/transferencia";
 import { toTransaccionDTO } from "./dto/transaccion";
@@ -32,6 +32,11 @@ export function buildApp(prisma: PrismaClient) {
     return toCuentaResumenDTO(cuenta, saldoActual);
   }
 
+  async function toCuentaResponse(cuenta: Cuenta) {
+    const saldoActual = await calcularSaldo(prisma, cuenta.id);
+    return toCuentaDTO(cuenta, saldoActual);
+  }
+
   async function toTransaccionResponse(transaccion: Transaccion) {
     const cuenta = await toCuentaResumen(transaccion.cuentaId);
     return toTransaccionDTO({ transaccion, cuenta });
@@ -54,6 +59,51 @@ export function buildApp(prisma: PrismaClient) {
   app.setErrorHandler((_error, _request, reply) => internalError(reply));
 
   app.get("/health", async () => ({ status: "ok" }));
+
+  const CuentaSchema = z.object({
+    nombre: z.string().min(1),
+    tipo: z.enum(["EFECTIVO", "BILLETERA_VIRTUAL", "CUENTA_BANCARIA", "TARJETA_CREDITO"]),
+    saldoInicial: z.string().or(z.number()).optional(),
+    banco: z.string().optional(),
+    ultimosDigitos: z.string().max(4).optional(),
+    colorIdentificador: z.string().optional(),
+    diaCierre: z.number().int().min(1).max(31).optional(),
+    diaPago: z.number().int().min(1).max(31).optional(),
+  });
+
+  app.post("/api/v1/cuentas", async (request, reply) => {
+    try {
+      const data = CuentaSchema.parse(request.body);
+      const cuenta = await prisma.cuenta.create({
+        data: {
+          nombre: data.nombre,
+          tipo: data.tipo as any,
+          saldoInicial: data.saldoInicial != null ? String(data.saldoInicial) : "0",
+          banco: data.banco,
+          ultimosDigitos: data.ultimosDigitos,
+          colorIdentificador: data.colorIdentificador,
+          diaCierre: data.diaCierre,
+          diaPago: data.diaPago,
+        },
+      });
+      return reply.code(201).send(await toCuentaResponse(cuenta));
+    } catch (error) {
+      if (error instanceof ZodError) return fromZodError(reply, error);
+      if (error instanceof Error) return fromDomainError(reply, error);
+      return internalError(reply);
+    }
+  });
+
+  app.get("/api/v1/cuentas", async (_request, reply) => {
+    try {
+      const cuentas = await prisma.cuenta.findMany({ orderBy: { nombre: "asc" } });
+      const dtos = await Promise.all(cuentas.map(toCuentaResponse));
+      return reply.send(dtos);
+    } catch (error) {
+      if (error instanceof Error) return fromDomainError(reply, error);
+      return internalError(reply);
+    }
+  });
 
   const GastoSchema = z.object({
     monto: z.string().or(z.number()),

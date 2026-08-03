@@ -16,8 +16,15 @@ function assertErrorShape(body: any, expectedCode: string) {
   if (body.code !== expectedCode) throw new Error(`expected code ${expectedCode}, got ${body.code}`);
 }
 
-function assertTransaccionShape(body: any) {
+function assertCuentaShape(body: any) {
   if (typeof body.id !== "string") throw new Error("id must be string");
+  if (typeof body.nombre !== "string") throw new Error("nombre must be string");
+  if (typeof body.tipo !== "string") throw new Error("tipo must be string");
+  if (typeof body.saldoInicial !== "number") throw new Error("saldoInicial must be number");
+  if (typeof body.saldoActual !== "number") throw new Error("saldoActual must be number");
+}
+
+function assertTransaccionShape(body: any) {
   if (typeof body.monto !== "number") throw new Error("monto must be number");
   if (typeof body.moneda !== "string") throw new Error("moneda must be string");
   if (typeof body.origen !== "string") throw new Error("origen must be string");
@@ -58,12 +65,11 @@ async function run() {
 
   const ts = Date.now();
 
-  const cuenta = await prisma.cuenta.create({
-    data: { nombre: "HTTP Test", tipo: "EFECTIVO", saldoInicial: "500" },
-  });
   const cuentaB = await prisma.cuenta.create({
     data: { nombre: "HTTP Test B", tipo: "EFECTIVO", saldoInicial: "0" },
   });
+
+  let cuenta: any;
 
   // 1. GET /health — no auth required
   {
@@ -81,7 +87,43 @@ async function run() {
     console.log("✓ auth guard returns 401 UNAUTHORIZED ErrorResponseDTO");
   }
 
-  // 3. POST /api/v1/gastos — TransaccionResponseDTO shape
+  // 3. POST /api/v1/cuentas — CuentaResponseDTO shape
+  let cuentaId: string;
+  {
+    const res = await app.inject({
+      method: "POST", url: "/api/v1/cuentas", headers: AUTH,
+      payload: { nombre: "Banco Test", tipo: "CUENTA_BANCARIA", saldoInicial: "1000", banco: "Galicia", diaCierre: 5, diaPago: 15 },
+    });
+    if (res.statusCode !== 201) throw new Error(`POST /cuentas: expected 201, got ${res.statusCode} — ${res.body}`);
+    const body = res.json();
+    assertCuentaShape(body);
+    if (body.nombre !== "Banco Test") throw new Error("nombre mismatch");
+    if (body.tipo !== "CUENTA_BANCARIA") throw new Error("tipo mismatch");
+    if (body.saldoInicial !== 1000) throw new Error(`saldoInicial should be 1000, got ${body.saldoInicial}`);
+    if (body.saldoActual !== 1000) throw new Error(`saldoActual should be 1000, got ${body.saldoActual}`);
+    if (body.banco !== "Galicia") throw new Error("banco mismatch");
+    if (body.diaCierre !== 5) throw new Error("diaCierre mismatch");
+    if (body.diaPago !== 15) throw new Error("diaPago mismatch");
+    cuentaId = body.id;
+    cuenta = { id: cuentaId, saldoInicial: "1000" };
+    console.log("✓ POST /api/v1/cuentas — CuentaResponseDTO shape + values");
+  }
+
+  // 4. GET /api/v1/cuentas — array of CuentaResponseDTO with derived saldos
+  {
+    const res = await app.inject({ method: "GET", url: "/api/v1/cuentas", headers: AUTH });
+    if (res.statusCode !== 200) throw new Error(`GET /cuentas: expected 200, got ${res.statusCode}`);
+    const body = res.json();
+    if (!Array.isArray(body)) throw new Error("GET /cuentas: expected array");
+    if (body.length === 0) throw new Error("GET /cuentas: expected at least one cuenta");
+    body.forEach((c: any) => assertCuentaShape(c));
+    const created = body.find((c: any) => c.id === cuentaId);
+    if (!created) throw new Error("GET /cuentas: created cuenta not found in list");
+    if (created.saldoActual !== 1000) throw new Error(`saldoActual should be 1000, got ${created.saldoActual}`);
+    console.log("✓ GET /api/v1/cuentas — array of CuentaResponseDTO with derived saldos");
+  }
+
+  // 5. POST /api/v1/gastos — TransaccionResponseDTO shape
   {
     const res = await app.inject({
       method: "POST", url: "/api/v1/gastos", headers: AUTH,
@@ -94,7 +136,7 @@ async function run() {
     if (body.moneda !== "ARS") throw new Error("moneda should be ARS");
     if (body.categoria !== "COMIDA") throw new Error("categoria mismatch");
     if (body.estado !== "CONFIRMADA") throw new Error("estado should be CONFIRMADA");
-    if (body.cuenta.saldoActual !== 350) throw new Error(`saldoActual should be 350, got ${body.cuenta.saldoActual}`);
+    if (body.cuenta.saldoActual !== 850) throw new Error(`saldoActual should be 850, got ${body.cuenta.saldoActual}`);
     console.log("✓ POST /api/v1/gastos — TransaccionResponseDTO shape + values");
   }
 
