@@ -6,6 +6,7 @@ import { toCuentaResumenDTO } from "./dto/cuenta";
 import { toResumenDTO } from "./dto/resumen";
 import { toTransferenciaDTO } from "./dto/transferencia";
 import { toTransaccionDTO } from "./dto/transaccion";
+import { unauthorized, fromZodError, fromDomainError, internalError } from "./dto/error";
 import {
   crearTransaccion,
   crearTransaccionOCR,
@@ -47,10 +48,10 @@ export function buildApp(prisma: PrismaClient) {
   app.addHook("onRequest", async (request, reply) => {
     if (request.url === "/health") return;
     const auth = request.headers["authorization"];
-    if (auth !== `Bearer ${API_TOKEN}`) {
-      return reply.code(401).send({ error: "Unauthorized" });
-    }
+    if (auth !== `Bearer ${API_TOKEN}`) return unauthorized(reply);
   });
+
+  app.setErrorHandler((_error, _request, reply) => internalError(reply));
 
   app.get("/health", async () => ({ status: "ok" }));
 
@@ -71,8 +72,9 @@ export function buildApp(prisma: PrismaClient) {
       const resultado = await crearTransaccion(prisma, body);
       return reply.code(201).send(await toTransaccionResponse(resultado));
     } catch (error) {
-      if (error instanceof ZodError) return reply.code(400).send({ error: error.errors });
-      return reply.code(400).send({ error: "Invalid payload or business error" });
+      if (error instanceof ZodError) return fromZodError(reply, error);
+      if (error instanceof Error) return fromDomainError(reply, error);
+      return internalError(reply);
     }
   });
 
@@ -82,8 +84,9 @@ export function buildApp(prisma: PrismaClient) {
       const resultado = await crearTransaccion(prisma, data);
       return reply.code(201).send(await toTransaccionResponse(resultado));
     } catch (error) {
-      if (error instanceof ZodError) return reply.code(400).send({ error: error.errors });
-      return reply.code(500).send({ error: "Internal error" });
+      if (error instanceof ZodError) return fromZodError(reply, error);
+      if (error instanceof Error) return fromDomainError(reply, error);
+      return internalError(reply);
     }
   });
 
@@ -130,8 +133,9 @@ export function buildApp(prisma: PrismaClient) {
           ? 202 : 201;
       return reply.code(statusCode).send(await toTransaccionResponse(resultado));
     } catch (error) {
-      if (error instanceof ZodError) return reply.code(400).send({ error: error.errors });
-      return reply.code(500).send({ error: "Internal error" });
+      if (error instanceof ZodError) return fromZodError(reply, error);
+      if (error instanceof Error) return fromDomainError(reply, error);
+      return internalError(reply);
     }
   });
 
@@ -145,10 +149,9 @@ export function buildApp(prisma: PrismaClient) {
       ]);
       return reply.code(201).send(toTransferenciaDTO({ transferencia: resultado, cuentaOrigen, cuentaDestino }));
     } catch (error) {
-      if (error instanceof ZodError) return reply.code(400).send({ error: error.errors });
-      if (error instanceof Error && ["Cuenta origen o destino no encontrada", "Cuenta origen y destino deben ser diferentes", "Fecha inválida"].includes(error.message))
-        return reply.code(400).send({ error: error.message });
-      return reply.code(500).send({ error: "Internal error" });
+      if (error instanceof ZodError) return fromZodError(reply, error);
+      if (error instanceof Error) return fromDomainError(reply, error);
+      return internalError(reply);
     }
   });
 
@@ -158,8 +161,9 @@ export function buildApp(prisma: PrismaClient) {
       const resultado = await crearResumenOCR(prisma, data);
       return reply.code(201).send(toResumenDTO(resultado));
     } catch (error) {
-      if (error instanceof ZodError) return reply.code(400).send({ error: error.errors });
-      return reply.code(500).send({ error: "Internal error" });
+      if (error instanceof ZodError) return fromZodError(reply, error);
+      if (error instanceof Error) return fromDomainError(reply, error);
+      return internalError(reply);
     }
   });
 
@@ -170,10 +174,9 @@ export function buildApp(prisma: PrismaClient) {
       const resultado = await corregirTransaccionOCR(prisma, params.id, data);
       return reply.code(200).send(await toTransaccionResponse(resultado));
     } catch (error) {
-      if (error instanceof ZodError) return reply.code(400).send({ error: error.errors });
-      if (error instanceof Error && ["Transaccion no encontrada", "Solo se pueden corregir transacciones OCR pendientes", "Monto inválido", "Fecha inválida"].includes(error.message))
-        return reply.code(400).send({ error: error.message });
-      return reply.code(500).send({ error: "Internal error" });
+      if (error instanceof ZodError) return fromZodError(reply, error);
+      if (error instanceof Error) return fromDomainError(reply, error);
+      return internalError(reply);
     }
   });
 
@@ -190,10 +193,9 @@ export function buildApp(prisma: PrismaClient) {
       const resultado = await resolverCategoriaPendienteTransaccion(prisma, params.id, data);
       return reply.code(200).send(await toTransaccionResponse(resultado));
     } catch (error) {
-      if (error instanceof ZodError) return reply.code(400).send({ error: error.errors });
-      if (error instanceof Error && ["Transaccion no encontrada", "Solo se pueden resolver transacciones con categoria pendiente", "Fecha inválida"].includes(error.message))
-        return reply.code(400).send({ error: error.message });
-      return reply.code(500).send({ error: "Internal error" });
+      if (error instanceof ZodError) return fromZodError(reply, error);
+      if (error instanceof Error) return fromDomainError(reply, error);
+      return internalError(reply);
     }
   });
 

@@ -10,6 +10,12 @@ const prisma = new PrismaClient();
 
 // ── shape assertions ──────────────────────────────────────────────────────────
 
+function assertErrorShape(body: any, expectedCode: string) {
+  if (typeof body.code !== "string") throw new Error(`error.code must be string, got ${JSON.stringify(body)}`);
+  if (typeof body.message !== "string") throw new Error("error.message must be string");
+  if (body.code !== expectedCode) throw new Error(`expected code ${expectedCode}, got ${body.code}`);
+}
+
 function assertTransaccionShape(body: any) {
   if (typeof body.id !== "string") throw new Error("id must be string");
   if (typeof body.monto !== "number") throw new Error("monto must be number");
@@ -67,11 +73,12 @@ async function run() {
     console.log("✓ GET /health");
   }
 
-  // 2. Auth guard
+  // 2. Auth guard — ErrorResponseDTO UNAUTHORIZED
   {
     const res = await app.inject({ method: "POST", url: "/api/v1/gastos" });
     if (res.statusCode !== 401) throw new Error(`auth guard: expected 401, got ${res.statusCode}`);
-    console.log("✓ auth guard returns 401 without token");
+    assertErrorShape(res.json(), "UNAUTHORIZED");
+    console.log("✓ auth guard returns 401 UNAUTHORIZED ErrorResponseDTO");
   }
 
   // 3. POST /api/v1/gastos — TransaccionResponseDTO shape
@@ -185,7 +192,45 @@ async function run() {
     console.log("✓ POST /api/v1/resumenes/ocr — ResumenResponseDTO shape + values");
   }
 
-  await app.close();
+  // 9. Validation error — ErrorResponseDTO BAD_REQUEST with details array
+  {
+    const res = await app.inject({
+      method: "POST", url: "/api/v1/gastos", headers: AUTH,
+      payload: { monto: "100", cuentaId: cuenta.id },
+    });
+    if (res.statusCode !== 400) throw new Error(`validation: expected 400, got ${res.statusCode}`);
+    const body = res.json();
+    assertErrorShape(body, "BAD_REQUEST");
+    if (!Array.isArray(body.details)) throw new Error("BAD_REQUEST details must be array for Zod errors");
+    console.log("✓ POST /api/v1/gastos missing fields — BAD_REQUEST ErrorResponseDTO with details");
+  }
+
+  // 10. Domain 404 — transaccion not found
+  {
+    const res = await app.inject({
+      method: "PATCH", url: "/api/v1/gastos/ocr/nonexistent-id/corregir", headers: AUTH,
+      payload: { categoria: "COMIDA" },
+    });
+    if (res.statusCode !== 404) throw new Error(`not found: expected 404, got ${res.statusCode}`);
+    assertErrorShape(res.json(), "NOT_FOUND");
+    console.log("✓ PATCH /corregir with bad id — NOT_FOUND ErrorResponseDTO");
+  }
+
+  // 11. Domain 422 — corregir a CONFIRMADA transaccion
+  {
+    const confirmedRes = await app.inject({
+      method: "POST", url: "/api/v1/gastos", headers: AUTH,
+      payload: { monto: "50", cuentaId: cuenta.id, categoria: "OTROS", origen: "MANUAL", idempotencyKey: `http-422-${ts}` },
+    });
+    const confirmedId = confirmedRes.json().id;
+    const res = await app.inject({
+      method: "PATCH", url: `/api/v1/gastos/ocr/${confirmedId}/corregir`, headers: AUTH,
+      payload: { categoria: "COMIDA" },
+    });
+    if (res.statusCode !== 422) throw new Error(`unprocessable: expected 422, got ${res.statusCode}`);
+    assertErrorShape(res.json(), "UNPROCESSABLE");
+    console.log("✓ PATCH /corregir on CONFIRMADA — UNPROCESSABLE ErrorResponseDTO");
+  }
   await prisma.$disconnect();
   console.log("\nAll HTTP DTO shape tests passed ✓");
 }
