@@ -11,13 +11,14 @@ async function run() {
       data: { nombre: "Cuenta Destino", tipo: "EFECTIVO", saldoInicial: "200" },
     });
 
+    const idempotencyKey = `transferencia-interna-1-${Date.now()}`;
     const transferencia = await crearTransferenciaInterna(prisma, {
       cuentaOrigenId: origen.id,
       cuentaDestinoId: destino.id,
       monto: "150",
       nota: "Pago entre cuentas",
       fecha: "2026-08-02",
-      idempotencyKey: "transferencia-interna-1",
+      idempotencyKey,
     });
 
     console.log("transferencia created id:", transferencia.id);

@@ -569,17 +569,25 @@ export async function crearResumenOCR(
     }
   }
 
-  const montoTotal = extractCurrencyAmount(texto);
+  const montoTotal = (() => {
+    const totalMatch = texto.match(
+      /monto\s*total\s*informado[:\s]*\$?\s*([\d.,-]+)/i,
+    );
+    if (totalMatch) return normalizeAmount(totalMatch[1]);
+    return extractCurrencyAmount(texto);
+  })();
 
   // buscar monto minimo
-  const minimoMatch = texto.match(/monto\s*minim[oó][:\s]*([\d.,-]+)/i);
+  const minimoMatch = texto.match(
+    /monto\s*minim[oó]\s*informado[:\s]*\$?\s*([\d.,-]+)/i,
+  );
   const montoMinimo = minimoMatch ? normalizeAmount(minimoMatch[1]) : undefined;
 
   // total consumos
   const totalConsumos = (() => {
     const m =
-      texto.match(/consumos(?:\s|:)\s*([\d.,-]+)/i) ||
-      texto.match(/total\s*consumos(?:\s|:)\s*([\d.,-]+)/i);
+      texto.match(/total\s*consumos[:\s]*\$?\s*([\d.,-]+)/i) ||
+      texto.match(/consumos(?:\s|:)\s*\$?\s*([\d.,-]+)/i);
     return m ? normalizeAmount(m[1]) : undefined;
   })();
 
