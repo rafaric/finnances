@@ -4,10 +4,12 @@ import { PrismaClient, Categoria, OrigenTransaccion, EstadoTransaccion, type Cue
 import { z, ZodError } from "zod";
 import { toCuentaResumenDTO, toCuentaDTO } from "./dto/cuenta";
 import { toResumenDTO } from "./dto/resumen";
+import { toResumenMensualDTO } from "./dto/resumenMensual";
 import { toTransferenciaDTO } from "./dto/transferencia";
 import { toTransaccionDTO } from "./dto/transaccion";
 import { unauthorized, fromZodError, fromDomainError, internalError } from "./dto/error";
-import { toPaginatedDTO } from "./dto/paginated";import {
+import { toPaginatedDTO } from "./dto/paginated";
+import {
   crearTransaccion,
   crearTransaccionOCR,
   corregirTransaccionOCR,
@@ -16,6 +18,7 @@ import { toPaginatedDTO } from "./dto/paginated";import {
   crearTransferenciaInterna,
 } from "./services/transaccion";
 import { calcularSaldo } from "./services/saldo";
+import { calcularResumenMensual } from "./services/resumenMensual";
 
 export function buildApp(prisma: PrismaClient) {
   const app = Fastify({ logger: false });
@@ -107,7 +110,7 @@ export function buildApp(prisma: PrismaClient) {
 
   const TransaccionesQuerySchema = z.object({
     cuentaId: z.string().optional(),
-    periodo: z.string().regex(/^\d{4}-\d{2}$/).optional(),
+    periodo: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional(),
     categoria: z.nativeEnum(Categoria).optional(),
     estado: z.nativeEnum(EstadoTransaccion).optional(),
     page: z.coerce.number().int().min(1).default(1),
@@ -142,6 +145,22 @@ export function buildApp(prisma: PrismaClient) {
 
       const items = await Promise.all(transacciones.map(toTransaccionResponse));
       return reply.send(toPaginatedDTO(items, page, limit, total));
+    } catch (error) {
+      if (error instanceof ZodError) return fromZodError(reply, error);
+      if (error instanceof Error) return fromDomainError(reply, error);
+      return internalError(reply);
+    }
+  });
+
+  const ResumenMensualQuerySchema = z.object({
+    periodo: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
+  });
+
+  app.get("/api/v1/resumen-mensual", async (request, reply) => {
+    try {
+      const { periodo } = ResumenMensualQuerySchema.parse(request.query);
+      const resumen = await calcularResumenMensual(prisma, periodo);
+      return reply.send(toResumenMensualDTO(resumen));
     } catch (error) {
       if (error instanceof ZodError) return fromZodError(reply, error);
       if (error instanceof Error) return fromDomainError(reply, error);

@@ -57,6 +57,21 @@ function assertResumenShape(body: any) {
   if (typeof body.estado !== "string") throw new Error("estado must be string");
 }
 
+function assertResumenMensualShape(body: any) {
+  if (typeof body.periodo !== "string") throw new Error("summary.periodo must be string");
+  for (const key of ["ingresos", "gastos", "ahorro", "margen", "disponibleLiquido", "deudaTarjetas"]) {
+    if (typeof body[key] !== "number") throw new Error(`summary.${key} must be number`);
+  }
+  if (!Array.isArray(body.gastosPorCategoria)) {
+    throw new Error("summary.gastosPorCategoria must be array");
+  }
+  body.gastosPorCategoria.forEach((item: any) => {
+    if (typeof item.categoria !== "string") throw new Error("category must be string");
+    if (typeof item.monto !== "number") throw new Error("category monto must be number");
+    if (typeof item.porcentaje !== "number") throw new Error("category porcentaje must be number");
+  });
+}
+
 // ── tests ─────────────────────────────────────────────────────────────────────
 
 async function run() {
@@ -305,7 +320,146 @@ async function run() {
     console.log("✓ POST /api/v1/resumenes/ocr — ResumenResponseDTO shape + values");
   }
 
-  // 9. Validation error — ErrorResponseDTO BAD_REQUEST with details array
+  // 9. GET /api/v1/resumen-mensual — aggregated economic summary
+  {
+    const periodo = "2099-11";
+    const baselineRes = await app.inject({
+      method: "GET",
+      url: `/api/v1/resumen-mensual?periodo=${periodo}`,
+      headers: AUTH,
+    });
+    if (baselineRes.statusCode !== 200) {
+      throw new Error(
+        `GET /resumen-mensual baseline: expected 200, got ${baselineRes.statusCode} — ${baselineRes.body}`,
+      );
+    }
+    const baseline = baselineRes.json();
+    assertResumenMensualShape(baseline);
+
+    const tarjetaRes = await app.inject({
+      method: "POST",
+      url: "/api/v1/cuentas",
+      headers: AUTH,
+      payload: {
+        nombre: `Tarjeta resumen ${ts}`,
+        tipo: "TARJETA_CREDITO",
+        saldoInicial: "-300",
+      },
+    });
+    if (tarjetaRes.statusCode !== 201) {
+      throw new Error(`summary card: expected 201, got ${tarjetaRes.statusCode}`);
+    }
+
+    await prisma.ingreso.create({
+      data: {
+        monto: "1200",
+        fechaCobro: new Date("2099-11-05T12:00:00.000Z"),
+        periodoDisponible: periodo,
+        concepto: "Ingreso HTTP test",
+        cuentaId: cuenta.id,
+      },
+    });
+
+    const expenseRes = await app.inject({
+      method: "POST",
+      url: "/api/v1/gastos",
+      headers: AUTH,
+      payload: {
+        monto: "80",
+        cuentaId: cuenta.id,
+        categoria: "SERVICIOS",
+        origen: "MANUAL",
+        fecha: "2099-11-10",
+        idempotencyKey: `http-summary-expense-${ts}`,
+      },
+    });
+    if (expenseRes.statusCode !== 201) {
+      throw new Error(
+        `summary expense: expected 201, got ${expenseRes.statusCode} — ${expenseRes.body}`,
+      );
+    }
+
+    const beforeTransferRes = await app.inject({
+      method: "GET",
+      url: `/api/v1/resumen-mensual?periodo=${periodo}`,
+      headers: AUTH,
+    });
+    if (beforeTransferRes.statusCode !== 200) {
+      throw new Error(
+        `GET /resumen-mensual before transfer: expected 200, got ${beforeTransferRes.statusCode}`,
+      );
+    }
+    const beforeTransfer = beforeTransferRes.json();
+
+    const transferRes = await app.inject({
+      method: "POST",
+      url: "/api/v1/transferencias",
+      headers: AUTH,
+      payload: {
+        cuentaOrigenId: cuenta.id,
+        cuentaDestinoId: cuentaB.id,
+        monto: "40",
+        fecha: "2099-11-15",
+        idempotencyKey: `http-summary-transfer-${ts}`,
+      },
+    });
+    if (transferRes.statusCode !== 201) {
+      throw new Error(
+        `summary transfer: expected 201, got ${transferRes.statusCode} — ${transferRes.body}`,
+      );
+    }
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/api/v1/resumen-mensual?periodo=${periodo}`,
+      headers: AUTH,
+    });
+    if (res.statusCode !== 200) {
+      throw new Error(`GET /resumen-mensual: expected 200, got ${res.statusCode}`);
+    }
+    const body = res.json();
+    assertResumenMensualShape(body);
+    if (body.periodo !== periodo) throw new Error("summary periodo mismatch");
+    if (body.ingresos - baseline.ingresos !== 1200) {
+      throw new Error(`summary ingresos delta should be 1200, got ${body.ingresos - baseline.ingresos}`);
+    }
+    if (body.gastos - baseline.gastos !== 80) {
+      throw new Error(`summary gastos delta should be 80, got ${body.gastos - baseline.gastos}`);
+    }
+    if (body.ahorro - baseline.ahorro !== 1120) {
+      throw new Error(`summary ahorro delta should be 1120, got ${body.ahorro - baseline.ahorro}`);
+    }
+    const servicios = body.gastosPorCategoria.find(
+      (item: { categoria: string }) => item.categoria === "SERVICIOS",
+    );
+    const baselineServicios = baseline.gastosPorCategoria.find(
+      (item: { categoria: string }) => item.categoria === "SERVICIOS",
+    );
+    const serviciosDelta = (servicios?.monto ?? 0) - (baselineServicios?.monto ?? 0);
+    if (!servicios || serviciosDelta !== 80) {
+      throw new Error("summary category aggregation mismatch");
+    }
+    if (body.disponibleLiquido !== beforeTransfer.disponibleLiquido) {
+      throw new Error("internal transfer must not change aggregate liquid availability");
+    }
+    if (body.deudaTarjetas - baseline.deudaTarjetas !== 300) {
+      throw new Error(`summary card debt delta should be 300, got ${body.deudaTarjetas - baseline.deudaTarjetas}`);
+    }
+    console.log("✓ GET /api/v1/resumen-mensual — aggregation and transfer exclusion");
+
+    const invalidRes = await app.inject({
+      method: "GET",
+      url: "/api/v1/resumen-mensual?periodo=2099-13",
+      headers: AUTH,
+    });
+    if (invalidRes.statusCode !== 400) {
+      throw new Error(`invalid summary periodo: expected 400, got ${invalidRes.statusCode}`);
+    }
+    assertErrorShape(invalidRes.json(), "BAD_REQUEST");
+    console.log("✓ GET /api/v1/resumen-mensual invalid periodo — BAD_REQUEST");
+  }
+
+  // 10. Validation error — ErrorResponseDTO BAD_REQUEST with details array
   {
     const res = await app.inject({
       method: "POST", url: "/api/v1/gastos", headers: AUTH,
@@ -318,7 +472,19 @@ async function run() {
     console.log("✓ POST /api/v1/gastos missing fields — BAD_REQUEST ErrorResponseDTO with details");
   }
 
-  // 10. Domain 404 — transaccion not found
+  // 11. Invalid transaction period — ErrorResponseDTO BAD_REQUEST
+  {
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/v1/transacciones?periodo=2099-13",
+      headers: AUTH,
+    });
+    if (res.statusCode !== 400) throw new Error(`invalid transaction period: expected 400, got ${res.statusCode}`);
+    assertErrorShape(res.json(), "BAD_REQUEST");
+    console.log("✓ GET /api/v1/transacciones invalid periodo — BAD_REQUEST");
+  }
+
+  // 12. Domain 404 — transaccion not found
   {
     const res = await app.inject({
       method: "PATCH", url: "/api/v1/gastos/ocr/nonexistent-id/corregir", headers: AUTH,
@@ -329,7 +495,7 @@ async function run() {
     console.log("✓ PATCH /corregir with bad id — NOT_FOUND ErrorResponseDTO");
   }
 
-  // 11. Domain 422 — corregir a CONFIRMADA transaccion
+  // 13. Domain 422 — corregir a CONFIRMADA transaccion
   {
     const confirmedRes = await app.inject({
       method: "POST", url: "/api/v1/gastos", headers: AUTH,
