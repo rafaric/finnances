@@ -14,7 +14,21 @@ import {
 const app = Fastify({ logger: true });
 const prisma = new PrismaClient();
 
-app.register(cors, { origin: true });
+app.register(cors, {
+  origin: process.env.ALLOWED_ORIGIN ?? false,
+  methods: ["GET", "POST", "PATCH", "PUT", "DELETE"],
+});
+
+const API_TOKEN = process.env.API_TOKEN;
+if (!API_TOKEN) throw new Error("API_TOKEN env var is required");
+
+app.addHook("onRequest", async (request, reply) => {
+  if (request.url === "/health") return;
+  const auth = request.headers["authorization"];
+  if (auth !== `Bearer ${API_TOKEN}`) {
+    return reply.code(401).send({ error: "Unauthorized" });
+  }
+});
 
 app.get("/health", async () => ({ status: "ok" }));
 
