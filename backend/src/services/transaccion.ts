@@ -8,10 +8,11 @@ import {
   EstadoTransaccion,
 } from "@prisma/client";
 import { z } from "zod";
+import { interpretarConGemini } from "./geminiOCR";
 
 const TransaccionSchema = z.object({
   monto: z.string().or(z.number()),
-  cuentaId: z.string(),
+  cuentaId: z.string().optional(),
   categoria: z.nativeEnum(Categoria),
   origen: z.nativeEnum(OrigenTransaccion),
   idempotencyKey: z.string(),
@@ -20,13 +21,34 @@ const TransaccionSchema = z.object({
   cuotaId: z.string().optional(),
   estado: z.nativeEnum(EstadoTransaccion).optional(),
   textoCrudoOCR: z.string().optional(),
+  esTransferenciaAPersona: z.boolean().optional(),
 });
 
 export type CrearTransaccionInput = z.infer<typeof TransaccionSchema>;
 
+function normalizeEntity(value: string): string {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+async function resolverCuentaOCR(prisma: PrismaClient, textoCrudo: string): Promise<string | undefined> {
+  const texto = normalizeEntity(textoCrudo);
+  const cuentas = await prisma.cuenta.findMany({
+    where: { OR: [{ nombreEntidad: { not: null } }, { ultimosDigitos: { not: null } }] },
+    select: { id: true, nombreEntidad: true, ultimosDigitos: true },
+  });
+  const entityMatches = cuentas.filter((account) => account.nombreEntidad && texto.includes(normalizeEntity(account.nombreEntidad)));
+  if (entityMatches.length === 1) return entityMatches[0].id;
+  if (entityMatches.length > 1) return undefined;
+
+  const digits = textoCrudo.match(/(?:terminad[oa]s?\s+en|[*xX#-])\s*(\d{4})/i)?.[1];
+  if (!digits) return undefined;
+  const digitMatches = cuentas.filter((account) => account.ultimosDigitos === digits);
+  return digitMatches.length === 1 ? digitMatches[0].id : undefined;
+}
+
 const GastoOCRSchema = z.object({
   textoCrudo: z.string(),
-  cuentaId: z.string(),
+  cuentaId: z.string().optional(),
   idempotencyKey: z.string(),
   data: z
     .object({
@@ -34,6 +56,7 @@ const GastoOCRSchema = z.object({
       categoria: z.string().optional(),
       comercio: z.string().optional(),
       fecha: z.string().optional(),
+      esTransferenciaAPersona: z.boolean().optional(),
     })
     .optional(),
 });
@@ -139,15 +162,16 @@ function inferCategoria(text: string): Categoria | undefined {
 
 function parseDateValue(text: string | undefined): string | undefined {
   if (!text) return undefined;
-  const candidate = new Date(text);
-  if (!Number.isNaN(candidate.getTime())) return candidate.toISOString();
-
-  const match = text.match(/(\d{2})[\/\-](\d{2})[\/\-](\d{4})/);
+  const match = text.match(/\b(\d{1,2})[\/](\d{1,2})[\/](\d{2}|\d{4})\b/i);
   if (match) {
     const [, day, month, year] = match;
-    const parsed = new Date(`${year}-${month}-${day}T00:00:00.000Z`);
+    const fullYear = year.length === 2 ? `20${year}` : year;
+    const parsed = new Date(`${fullYear}-${month.padStart(2, "0")}-${day.padStart(2, "0")}T00:00:00.000Z`);
     if (!Number.isNaN(parsed.getTime())) return parsed.toISOString();
   }
+
+  const candidate = new Date(text);
+  if (!Number.isNaN(candidate.getTime())) return candidate.toISOString();
 
   return undefined;
 }
@@ -202,12 +226,12 @@ function interpretarOCR(textoCrudo: string, fallback?: OCRFallbackData) {
   }
 
   if (!fecha) {
-    const dateMatch = texto.match(/(\d{4}-\d{2}-\d{2})/);
+    const dateMatch = texto.match(/(\d{4}-\d{2}-\d{2}|\d{1,2}[\/]\d{1,2}[\/]\d{2,4})/);
     if (dateMatch) fecha = parseDateValue(dateMatch[1]);
   }
 
   const exito = Boolean(monto && categoria);
-  return { monto, categoria, comercio, fecha, exito };
+  return { monto, categoria, comercio, fecha, esTransferenciaAPersona: false, exito };
 }
 
 export async function crearTransaccion(
@@ -222,6 +246,9 @@ export async function crearTransaccion(
   if (existing) return existing as Transaccion;
 
   const estado = data.estado ?? EstadoTransaccion.CONFIRMADA;
+  if (estado === EstadoTransaccion.CONFIRMADA && !data.cuentaId) {
+    throw new Error("No se puede confirmar una transaccion sin cuenta");
+  }
   const monto =
     estado === EstadoTransaccion.CONFIRMADA
       ? normalizarMontoGasto(data.monto)
@@ -242,6 +269,7 @@ export async function crearTransaccion(
         fecha: data.fecha ? new Date(data.fecha) : new Date(),
         estado,
         textoCrudoOCR: data.textoCrudoOCR,
+        esTransferenciaAPersona: data.esTransferenciaAPersona ?? false,
       },
     });
 
@@ -266,6 +294,7 @@ const CorregirOCRSchema = z.object({
   categoria: z.nativeEnum(Categoria).optional(),
   comercio: z.string().optional(),
   fecha: z.string().optional(),
+  cuentaId: z.string().optional(),
 });
 
 export type CorregirTransaccionOCRInput = z.infer<typeof CorregirOCRSchema>;
@@ -274,7 +303,7 @@ const TransferenciaInternaSchema = z.object({
   cuentaOrigenId: z.string(),
   cuentaDestinoId: z.string(),
   monto: z.string().or(z.number()),
-  nota: z.string().optional(),
+  nota: z.string().max(60).optional(),
   fecha: z.string().optional(),
   idempotencyKey: z.string(),
 });
@@ -299,6 +328,11 @@ export async function crearTransferenciaInterna(
   });
   if (existing) return existing;
 
+  const normalizedMonto = normalizeAmount(data.monto);
+  if (normalizedMonto == null || Number(normalizedMonto) <= 0) {
+    throw new Error("Monto inválido");
+  }
+
   const parsedFecha = data.fecha ? parseDateValue(data.fecha) : undefined;
   if (data.fecha && !parsedFecha) {
     throw new Error("Fecha inválida");
@@ -320,11 +354,34 @@ export async function crearTransferenciaInterna(
       throw new Error("Cuenta origen o destino no encontrada");
     }
 
+    const [transacciones, salientes, entrantes] = await Promise.all([
+      tx.transaccion.findMany({
+        where: { cuentaId: data.cuentaOrigenId, estado: EstadoTransaccion.CONFIRMADA },
+        select: { monto: true },
+      }),
+      tx.transferenciaInterna.findMany({
+        where: { cuentaOrigenId: data.cuentaOrigenId },
+        select: { monto: true },
+      }),
+      tx.transferenciaInterna.findMany({
+        where: { cuentaDestinoId: data.cuentaOrigenId },
+        select: { monto: true },
+      }),
+    ]);
+    const saldoDisponible = Number(origenCuenta.saldoInicial)
+      + transacciones.reduce((sum, item) => sum + Number(item.monto), 0)
+      - salientes.reduce((sum, item) => sum + Number(item.monto), 0)
+      + entrantes.reduce((sum, item) => sum + Number(item.monto), 0);
+
+    if (Number(normalizedMonto) > saldoDisponible) {
+      throw new Error("Saldo insuficiente para la transferencia");
+    }
+
     const transferencia = await tx.transferenciaInterna.create({
       data: {
         cuentaOrigenId: data.cuentaOrigenId,
         cuentaDestinoId: data.cuentaDestinoId,
-        monto: typeof data.monto === "string" ? data.monto : String(data.monto),
+        monto: normalizedMonto,
         idempotencyKey: data.idempotencyKey,
         nota: data.nota,
         fecha: parsedFecha ? new Date(parsedFecha) : undefined,
@@ -374,7 +431,9 @@ export async function corregirTransaccionOCR(
   }
 
   const updatedCategoria = data.categoria ?? transaccion.categoria;
+  const cuentaId = data.cuentaId ?? transaccion.cuentaId;
   const shouldConfirm = Number(normalizedMonto) !== 0 && Boolean(updatedCategoria);
+  if (shouldConfirm && !cuentaId) throw new Error("No se puede confirmar una transaccion sin cuenta");
 
   const updated = await prisma.$transaction(async (tx) => {
     return tx.transaccion.update({
@@ -387,6 +446,7 @@ export async function corregirTransaccionOCR(
         estado: shouldConfirm
           ? EstadoTransaccion.CONFIRMADA
           : EstadoTransaccion.PENDIENTE_REVISION,
+        cuentaId,
       },
     });
   });
@@ -398,6 +458,7 @@ const ResolverCategoriaSchema = z.object({
   categoria: z.nativeEnum(Categoria),
   comercio: z.string().optional(),
   fecha: z.string().optional(),
+  cuentaId: z.string().optional(),
 });
 
 export type ResolverCategoriaPendienteInput = z.infer<
@@ -425,6 +486,9 @@ export async function resolverCategoriaPendienteTransaccion(
     throw new Error("Monto inválido");
   }
 
+  const cuentaId = data.cuentaId ?? transaccion.cuentaId;
+  if (!cuentaId) throw new Error("No se puede confirmar una transaccion sin cuenta");
+
   let fecha = transaccion.fecha;
   if (data.fecha) {
     const parsed = parseDateValue(data.fecha);
@@ -440,6 +504,7 @@ export async function resolverCategoriaPendienteTransaccion(
         comercio: data.comercio ?? transaccion.comercio,
         fecha,
         estado: EstadoTransaccion.CONFIRMADA,
+        cuentaId,
       },
     });
   });
@@ -452,17 +517,41 @@ export async function crearTransaccionOCR(
   input: CrearTransaccionOCRInput,
 ): Promise<Transaccion> {
   const data = GastoOCRSchema.parse(input);
-  const interpreted = interpretarOCR(data.textoCrudo, data.data);
+  const cuentaId = data.cuentaId ?? await resolverCuentaOCR(prisma, data.textoCrudo);
+  const heuristic = interpretarOCR(data.textoCrudo, data.data);
+  if (data.data?.esTransferenciaAPersona === true) {
+    heuristic.esTransferenciaAPersona = true;
+  }
+  let interpreted = heuristic;
+  if (process.env.GEMINI_API_KEY && process.env.NODE_ENV !== "test") {
+    try {
+      const ai = await interpretarConGemini(data.textoCrudo);
+      if (ai) {
+        const categoria = ai.categoria?.toUpperCase();
+        interpreted = {
+          monto: ai.monto == null ? undefined : String(ai.monto),
+          categoria: categoria && Object.values(Categoria).includes(categoria as Categoria) ? categoria as Categoria : undefined,
+          comercio: ai.comercio ?? undefined,
+          fecha: ai.fecha ?? undefined,
+          esTransferenciaAPersona: ai.esTransferenciaAPersona,
+          exito: Boolean(ai.monto && categoria && Object.values(Categoria).includes(categoria as Categoria)),
+        };
+      }
+    } catch {
+      interpreted = { monto: undefined, categoria: undefined, comercio: undefined, fecha: undefined, esTransferenciaAPersona: false, exito: false };
+    }
+  }
 
-  const estado = interpreted.exito
+  const esTransferenciaAPersona = "esTransferenciaAPersona" in interpreted && interpreted.esTransferenciaAPersona === true;
+  const estado = interpreted.exito && cuentaId && !esTransferenciaAPersona
     ? EstadoTransaccion.CONFIRMADA
-    : interpreted.monto && !interpreted.categoria
-      ? EstadoTransaccion.PENDIENTE_CATEGORIA
-      : EstadoTransaccion.PENDIENTE_REVISION;
+      : cuentaId && interpreted.monto && (!interpreted.categoria || esTransferenciaAPersona)
+        ? EstadoTransaccion.PENDIENTE_CATEGORIA
+        : EstadoTransaccion.PENDIENTE_REVISION;
 
   return crearTransaccion(prisma, {
     monto: interpreted.monto ?? "0",
-    cuentaId: data.cuentaId,
+    cuentaId,
     categoria: interpreted.categoria ?? Categoria.OTROS,
     origen: OrigenTransaccion.OCR_IA,
     idempotencyKey: data.idempotencyKey,
@@ -470,6 +559,7 @@ export async function crearTransaccionOCR(
     fecha: interpreted.fecha,
     estado,
     textoCrudoOCR: data.textoCrudo,
+    esTransferenciaAPersona,
   } as CrearTransaccionInput);
 }
 

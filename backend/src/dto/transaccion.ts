@@ -10,8 +10,9 @@ export interface TransaccionResponseDTO {
   categoria: Categoria;
   fecha: string;
   estado: EstadoTransaccion;
-  cuenta: CuentaResumenDTO;
+  cuenta?: CuentaResumenDTO;
   textoCrudoOCR?: string;
+  esTransferenciaAPersona: boolean;
 }
 
 export interface ToTransaccionDTOInput {
@@ -25,9 +26,10 @@ export interface ToTransaccionDTOInput {
     | "categoria"
     | "fecha"
     | "estado"
-    | "textoCrudoOCR"
+     | "textoCrudoOCR"
+     | "esTransferenciaAPersona"
   >;
-  cuenta: CuentaResumenDTO;
+  cuenta?: CuentaResumenDTO;
 }
 
 export function toTransaccionDTO({
@@ -45,5 +47,6 @@ export function toTransaccionDTO({
     estado: transaccion.estado,
     cuenta,
     textoCrudoOCR: transaccion.textoCrudoOCR ?? undefined,
+    esTransferenciaAPersona: transaccion.esTransferenciaAPersona,
   };
 }

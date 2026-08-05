@@ -32,6 +32,9 @@ const DOMAIN_400 = new Set([
   "Cuenta origen y destino deben ser diferentes",
   "Fecha inválida",
   "Monto inválido",
+  "Saldo insuficiente para la transferencia",
+  "No se puede confirmar una transaccion sin cuenta",
+  "Entidad OCR ya asociada a otra cuenta",
 ]);
 
 const DOMAIN_404 = new Set([

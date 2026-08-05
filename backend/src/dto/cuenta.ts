@@ -22,6 +22,7 @@ export interface CuentaResponseDTO {
   nombre: string;
   tipo: TipoCuenta;
   banco?: string;
+  nombreEntidad?: string;
   ultimosDigitos?: string;
   colorIdentificador?: string;
   saldoInicial: number;
@@ -33,7 +34,7 @@ export interface CuentaResponseDTO {
 export function toCuentaDTO(
   cuenta: Pick<
     Cuenta,
-    | "id" | "nombre" | "tipo" | "banco" | "ultimosDigitos"
+    | "id" | "nombre" | "tipo" | "banco" | "nombreEntidad" | "ultimosDigitos"
     | "colorIdentificador" | "saldoInicial" | "diaCierre" | "diaPago"
   >,
   saldoCalculado: number,
@@ -43,6 +44,7 @@ export function toCuentaDTO(
     nombre: cuenta.nombre,
     tipo: cuenta.tipo,
     banco: cuenta.banco ?? undefined,
+    nombreEntidad: cuenta.nombreEntidad ?? undefined,
     ultimosDigitos: cuenta.ultimosDigitos ?? undefined,
     colorIdentificador: cuenta.colorIdentificador ?? undefined,
     saldoInicial: Number(cuenta.saldoInicial),

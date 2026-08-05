@@ -14,10 +14,14 @@ async function run() {
 
     const key1 = "ocr-key-1-" + Date.now();
     const key2 = "ocr-key-2-" + Date.now();
+    const entityName = "EntidadOCR" + Date.now();
+    const entidad = await prisma.cuenta.create({
+      data: { nombre: "Mercado Pago OCR", nombreEntidad: entityName, tipo: "BILLETERA_VIRTUAL", saldoInicial: "0" },
+    });
 
     const confirmed = await crearTransaccionOCR(prisma, {
       textoCrudo:
-        "monto: 150.00, categoria: COMIDA, comercio: La Pizzeria, fecha: 2026-08-02",
+        "monto: 150.00, categoria: COMIDA, comercio: La Pizzeria, fecha: 02/08/26",
       cuentaId: cuenta.id,
       idempotencyKey: key1,
     });
@@ -37,10 +41,29 @@ async function run() {
     if (confirmed.estado !== "CONFIRMADA") {
       throw new Error("Expected first OCR transaction to be CONFIRMADA");
     }
+    if (confirmed.fecha.toISOString() !== "2026-08-02T00:00:00.000Z") {
+      throw new Error(`Expected Argentine date to parse as August 2, got ${confirmed.fecha.toISOString()}`);
+    }
     if (pending.estado !== "PENDIENTE_CATEGORIA") {
       throw new Error(
         "Expected second OCR transaction to be PENDIENTE_CATEGORIA",
       );
+    }
+
+    const unresolved = await crearTransaccionOCR(prisma, {
+      textoCrudo: "Compra en comercio desconocido por $50",
+      idempotencyKey: "ocr-unresolved-" + Date.now(),
+    });
+    if (unresolved.estado !== "PENDIENTE_REVISION" || unresolved.cuentaId !== null) {
+      throw new Error("Expected unresolved OCR transaction to remain pending without an account");
+    }
+
+    const resolvedByEntity = await crearTransaccionOCR(prisma, {
+      textoCrudo: `Pago ${entityName} por $75`,
+      idempotencyKey: "ocr-entity-" + Date.now(),
+    });
+    if (resolvedByEntity.cuentaId !== entidad.id || resolvedByEntity.estado !== "CONFIRMADA") {
+      throw new Error("Expected OCR account resolution by entity name");
     }
 
     const corrected = await corregirTransaccionOCR(prisma, pending.id, {

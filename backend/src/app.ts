@@ -20,6 +20,10 @@ import {
 import { calcularSaldo } from "./services/saldo";
 import { calcularResumenMensual } from "./services/resumenMensual";
 
+function normalizeEntity(value: string): string {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
 export function buildApp(prisma: PrismaClient) {
   const app = Fastify({ logger: false });
 
@@ -41,7 +45,7 @@ export function buildApp(prisma: PrismaClient) {
   }
 
   async function toTransaccionResponse(transaccion: Transaccion) {
-    const cuenta = await toCuentaResumen(transaccion.cuentaId);
+    const cuenta = transaccion.cuentaId ? await toCuentaResumen(transaccion.cuentaId) : undefined;
     return toTransaccionDTO({ transaccion, cuenta });
   }
 
@@ -68,6 +72,7 @@ export function buildApp(prisma: PrismaClient) {
     tipo: z.enum(["EFECTIVO", "BILLETERA_VIRTUAL", "CUENTA_BANCARIA", "TARJETA_CREDITO"]),
     saldoInicial: z.string().or(z.number()).optional(),
     banco: z.string().optional(),
+    nombreEntidad: z.string().min(1).optional(),
     ultimosDigitos: z.string().max(4).optional(),
     colorIdentificador: z.string().optional(),
     diaCierre: z.number().int().min(1).max(31).optional(),
@@ -83,6 +88,7 @@ export function buildApp(prisma: PrismaClient) {
           tipo: data.tipo as any,
           saldoInicial: data.saldoInicial != null ? String(data.saldoInicial) : "0",
           banco: data.banco,
+          nombreEntidad: data.nombreEntidad ? normalizeEntity(data.nombreEntidad) : undefined,
           ultimosDigitos: data.ultimosDigitos,
           colorIdentificador: data.colorIdentificador,
           diaCierre: data.diaCierre,
@@ -92,6 +98,38 @@ export function buildApp(prisma: PrismaClient) {
       return reply.code(201).send(await toCuentaResponse(cuenta));
     } catch (error) {
       if (error instanceof ZodError) return fromZodError(reply, error);
+      if (error instanceof Error && error.message.includes("Unique constraint")) return fromDomainError(reply, new Error("Entidad OCR ya asociada a otra cuenta"));
+      if (error instanceof Error) return fromDomainError(reply, error);
+      return internalError(reply);
+    }
+  });
+
+  const ActualizarCuentaSchema = CuentaSchema.partial().refine((data) => Object.keys(data).length > 0, {
+    message: "Debe indicar al menos un campo para actualizar",
+  });
+
+  app.patch("/api/v1/cuentas/:id", async (request, reply) => {
+    try {
+      const params = z.object({ id: z.string() }).parse(request.params);
+      const data = ActualizarCuentaSchema.parse(request.body);
+      const cuenta = await prisma.cuenta.findUnique({ where: { id: params.id } });
+      if (!cuenta) throw new Error("Cuenta no encontrada");
+      const updated = await prisma.cuenta.update({
+        where: { id: params.id },
+        data: {
+          nombre: data.nombre,
+          nombreEntidad: data.nombreEntidad ? normalizeEntity(data.nombreEntidad) : undefined,
+          banco: data.banco,
+          ultimosDigitos: data.ultimosDigitos,
+          colorIdentificador: data.colorIdentificador,
+          diaCierre: data.diaCierre,
+          diaPago: data.diaPago,
+        },
+      });
+      return reply.send(await toCuentaResponse(updated));
+    } catch (error) {
+      if (error instanceof ZodError) return fromZodError(reply, error);
+      if (error instanceof Error && error.message.includes("Unique constraint")) return fromDomainError(reply, new Error("Entidad OCR ya asociada a otra cuenta"));
       if (error instanceof Error) return fromDomainError(reply, error);
       return internalError(reply);
     }
@@ -113,6 +151,7 @@ export function buildApp(prisma: PrismaClient) {
     periodo: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional(),
     categoria: z.nativeEnum(Categoria).optional(),
     estado: z.nativeEnum(EstadoTransaccion).optional(),
+    tipo: z.enum(["GASTO", "INGRESO"]).optional(),
     page: z.coerce.number().int().min(1).default(1),
     limit: z.coerce.number().int().min(1).max(100).default(20),
   });
@@ -120,12 +159,14 @@ export function buildApp(prisma: PrismaClient) {
   app.get("/api/v1/transacciones", async (request, reply) => {
     try {
       const query = TransaccionesQuerySchema.parse(request.query);
-      const { cuentaId, periodo, categoria, estado, page, limit } = query;
+      const { cuentaId, periodo, categoria, estado, tipo, page, limit } = query;
 
       const where: any = {};
       if (cuentaId) where.cuentaId = cuentaId;
       if (categoria) where.categoria = categoria;
       if (estado) where.estado = estado;
+      if (tipo === "GASTO") where.monto = { lt: 0 };
+      if (tipo === "INGRESO") where.monto = { gt: 0 };
       if (periodo) {
         const start = new Date(`${periodo}-01T00:00:00.000Z`);
         const end = new Date(start);
@@ -147,6 +188,23 @@ export function buildApp(prisma: PrismaClient) {
       return reply.send(toPaginatedDTO(items, page, limit, total));
     } catch (error) {
       if (error instanceof ZodError) return fromZodError(reply, error);
+      if (error instanceof Error && error.message.includes("Unique constraint")) return fromDomainError(reply, new Error("Entidad OCR ya asociada a otra cuenta"));
+      if (error instanceof Error) return fromDomainError(reply, error);
+      return internalError(reply);
+    }
+  });
+
+  app.get("/api/v1/pendientes", async (_request, reply) => {
+    try {
+      const pendientes = await prisma.transaccion.findMany({
+        where: {
+          origen: OrigenTransaccion.OCR_IA,
+          estado: { in: [EstadoTransaccion.PENDIENTE_REVISION, EstadoTransaccion.PENDIENTE_CATEGORIA] },
+        },
+        orderBy: { createdAt: "desc" },
+      });
+      return reply.send(await Promise.all(pendientes.map(toTransaccionResponse)));
+    } catch (error) {
       if (error instanceof Error) return fromDomainError(reply, error);
       return internalError(reply);
     }
@@ -205,7 +263,7 @@ export function buildApp(prisma: PrismaClient) {
 
   const GastoOCRSchema = z.object({
     textoCrudo: z.string(),
-    cuentaId: z.string(),
+    cuentaId: z.string().optional(),
     idempotencyKey: z.string(),
     data: z.object({
       monto: z.string().or(z.number()).optional(),
@@ -220,6 +278,7 @@ export function buildApp(prisma: PrismaClient) {
     categoria: z.nativeEnum(Categoria).optional(),
     comercio: z.string().optional(),
     fecha: z.string().optional(),
+    cuentaId: z.string().optional(),
   });
 
   const TransferenciaSchema = z.object({

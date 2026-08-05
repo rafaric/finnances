@@ -1,301 +1,365 @@
-# Plan de Slice Minima de Persistencia
+# Plan de Frontend: Primera Vertical Real
 
 ## Objetivo
 
-Preparar el backend para que el frontend pueda trabajar con datos reales de
-cuentas, movimientos y resumen mensual, sin duplicar reglas de negocio ni
-inventar datos en la interfaz.
+Convertir el scaffold React/Vite existente en una primera vertical funcional
+de la PWA Finnances, conectada a los contratos reales del backend.
 
-Esta slice no implementa todavía toda la PWA. Cierra el contrato mínimo de
-persistencia y lectura necesario para construir el Home, la carga manual y el
-listado de movimientos.
+La primera vertical se enfoca exclusivamente en **registrar gastos**. No se
+implementa todavía la carga manual de ingresos porque el backend aún no tiene
+un endpoint para ese flujo.
 
-## Convencion monetaria
+## Design Read
 
-`Transaccion.monto` se persiste con signo:
+PWA personal de finanzas para un usuario individual, mobile-first, con una
+interfaz calma y contable, basada en la estética verde sobria ya existente.
 
-- Gasto: monto negativo. Ejemplo: `-150`.
-- Ingreso: se mantiene modelado en `Ingreso`, no se crea una `Transaccion`.
-- Transferencia interna: se persiste únicamente en `TransferenciaInterna`.
+Principios visuales:
 
-El saldo derivado de una cuenta es:
+- Una sola paleta verde con fondos claros y modo oscuro equivalente.
+- Densidad media, priorizando lectura rápida y contexto.
+- Sin estética de dashboard SaaS genérico.
+- Sin datos ficticios: estados vacíos honestos cuando todavía no hay datos.
+- Controles táctiles claros y navegación inferior persistente.
 
-```text
-saldoActual = saldoInicial
-            + suma(Transaccion confirmadas)
-            - transferencias salientes
-            + transferencias entrantes
-```
-
-Ejemplo:
-
-```text
-saldoInicial = 500
-gasto = -150
-saldoActual = 350
-```
-
-La API puede recibir un gasto como monto positivo desde la UI. La capa de
-servicio debe normalizarlo a negativo antes de persistirlo. La UI no debe
-obligar al usuario a escribir el signo.
-
-## Alcance
+## Alcance de la Primera Vertical
 
 ### Incluido
 
-- Normalización de signos en la creación de gastos manuales y OCR.
-- Corrección de `calcularSaldo()` y sus pruebas.
-- Alta y listado de cuentas.
-- Listado filtrable de transacciones.
-- Resumen mensual centralizado.
-- DTOs explícitos para todas las respuestas.
-- Error DTO único para todos los errores HTTP.
-- Tests de dominio y HTTP de los nuevos contratos.
+- Configuración de conexión por token durante la sesión.
+- Onboarding y alta de cuenta.
+- Listado de cuentas reales.
+- Home conectado a cuentas y resumen mensual.
+- Registro manual de gastos.
+- Listado de movimientos reales.
+- Análisis mensual básico.
+- Estados de carga, error, vacío y éxito.
+- Responsive mobile-first.
 
-### Fuera de esta slice
+### Fuera de alcance
 
-- Frontend conectado a datos reales.
+- Alta manual de ingresos.
+- Toggle Gasto/Ingreso.
+- Transferencias desde la interfaz.
+- OCR y corrección de pendientes.
+- Recurrentes y resúmenes.
 - IndexedDB y cola offline.
 - Web Push.
-- Confirmación de gastos recurrentes.
-- Confirmación de resúmenes.
-- Motor completo de cuotas y reconciliación de tarjetas.
-- Dashboard de gráficos avanzados.
+- Metas de ahorro.
+- Gráficos avanzados o librerías de visualización.
 
-## Contratos API
+## Contratos Backend Disponibles
 
-Todos los endpoints requieren `Authorization: Bearer <API_TOKEN>` y nunca
-devuelven entidades ORM directamente.
+El frontend consumirá estos endpoints existentes:
 
-### Crear cuenta
+- `POST /api/v1/cuentas`
+- `GET /api/v1/cuentas`
+- `POST /api/v1/gastos`
+- `GET /api/v1/transacciones`
+- `GET /api/v1/resumen-mensual?periodo=YYYY-MM`
 
-```http
-POST /api/v1/cuentas
-```
-
-Payload mínimo:
-
-```json
-{
-  "nombre": "Banco principal",
-  "tipo": "CUENTA_BANCARIA",
-  "saldoInicial": "500"
-}
-```
-
-La respuesta es `CuentaResponseDTO`.
-
-### Listar cuentas
+Todos requieren:
 
 ```http
-GET /api/v1/cuentas
+Authorization: Bearer <API_TOKEN>
 ```
 
-Respuesta: `CuentaResponseDTO[]`.
-
-Cada saldo se calcula con `calcularSaldo()` al momento de responder. No se
-agrega ni se usa un campo persistido `saldoActual`.
-
-### CuentaResponseDTO
+Las respuestas usan DTOs explícitos y los errores tienen esta forma:
 
 ```typescript
-interface CuentaResponseDTO {
-  id: string;
-  nombre: string;
-  tipo: TipoCuenta;
-  banco?: string;
-  ultimosDigitos?: string;
-  colorIdentificador?: string;
-  saldoInicial: number;
-  saldoActual: number;
-  diaCierre?: number;
-  diaPago?: number;
+interface ApiError {
+  code: string;
+  message: string;
+  details?: unknown;
 }
 ```
 
-`CuentaResumenDTO` continúa siendo el tipo compartido para cuentas anidadas
-dentro de otras respuestas. No se redefinen sus campos inline.
+## Arquitectura Frontend
 
-### Listar transacciones
+### Stack
+
+- React 19.
+- Vite.
+- TypeScript.
+- CSS existente, sin agregar una librería visual todavía.
+- Estado local con hooks de React; no agregar estado global hasta que exista
+  una necesidad real.
+- No agregar router en esta primera vertical: la navegación actual por estado
+  es suficiente y mantiene el bundle pequeño.
+
+### Estructura objetivo
+
+```text
+frontend/src/
+  api/
+    client.ts
+    types.ts
+  components/
+    AccountSelector.tsx
+    CategorySelector.tsx
+    DateField.tsx
+    EmptyState.tsx
+    ErrorState.tsx
+    LoadingState.tsx
+    MoneyInput.tsx
+    BottomNavigation.tsx
+    CuentaResumen.tsx
+  features/
+    onboarding/
+    home/
+    gastos/
+    movimientos/
+    analisis/
+  lib/
+    formatters.ts
+  App.tsx
+  index.css
+```
+
+La estructura puede crecer por feature, pero cada componente compartido debe
+tener una única implementación.
+
+## Slice 1: Conexión y Onboarding
+
+### Conexión
+
+- Mantener el token únicamente en `sessionStorage` durante desarrollo.
+- No usar variables `VITE_*` para secretos: Vite las expone en el bundle.
+- La pantalla solicita solo el token, no un `accountId` manual.
+- Después de autenticar, `GET /api/v1/cuentas` determina las cuentas
+  disponibles.
+
+### Sin cuentas
+
+Si el token es válido pero no hay cuentas:
+
+- mostrar onboarding de alta de cuenta;
+- no mostrar Home vacío;
+- explicar que el saldo actual será derivado y no editable.
+
+### Alta de cuenta
+
+Campos:
+
+- nombre;
+- tipo;
+- saldo inicial;
+- banco opcional;
+- últimos dígitos opcionales;
+- color identificador;
+- día de cierre y pago para tarjetas.
+
+Para `TARJETA_CREDITO`:
+
+- preseleccionar saldo negativo;
+- usar copy orientado a deuda: “¿Cuánto debés actualmente?”;
+- mostrar el saldo actual como dato derivado, no como input editable.
+
+## Slice 2: Home Real
+
+Al cargar el Home, consultar en paralelo:
+
+- `GET /api/v1/cuentas`;
+- `GET /api/v1/resumen-mensual?periodo=YYYY-MM`.
+
+Mostrar:
+
+- selector horizontal de mes;
+- disponible líquido;
+- deuda de tarjetas separada;
+- ingresos del período como dato de resumen, no como acción de carga;
+- gastos del período;
+- ahorro y margen;
+- sección colapsada de “Mis cuentas” con contador;
+- acciones rápidas.
+
+Acciones activas:
+
+- `Registrar gasto`.
+
+Acciones futuras, no visibles como botones deshabilitados:
+
+- transferir;
+- recurrentes;
+- asistente.
+
+Estados:
+
+- skeleton durante carga;
+- error contextual con reintento;
+- empty state si el período no tiene movimientos;
+- onboarding si no existen cuentas.
+
+Los valores deben venir del `ResumenMensualDTO`. El frontend no recalcula
+gastos ni categorías.
+
+## Slice 3: Registrar Gasto
+
+### Formulario
+
+El formulario muestra únicamente un flujo de gasto. No incluye toggle
+Gasto/Ingreso.
+
+Orden:
+
+1. Monto grande con teclado numérico.
+2. Fecha con shortcuts “Hoy” y “Ayer” más selector completo.
+3. Selector de cuenta con saldo actual.
+4. Selector de categoría con las siete categorías fijas.
+5. Nota opcional, máximo 60 caracteres.
+6. Acción `Registrar gasto`.
+
+La UI envía el monto positivo. El backend lo normaliza y persiste negativo.
+
+### Envío
+
+```http
+POST /api/v1/gastos
+```
+
+Después de una respuesta exitosa:
+
+- mostrar el saldo recalculado incluido en `TransaccionResponseDTO`;
+- actualizar cuentas;
+- actualizar resumen mensual;
+- actualizar movimientos;
+- volver al Home o mostrar confirmación contextual.
+
+Errores:
+
+- `BAD_REQUEST`: mostrar validación cerca del formulario;
+- `UNAUTHORIZED`: solicitar nuevamente conexión;
+- `INTERNAL_ERROR`: conservar datos del formulario y permitir reintentar.
+
+## Slice 4: Movimientos
+
+Consumir:
 
 ```http
 GET /api/v1/transacciones
 ```
 
-Query params opcionales:
+Filtros:
 
-- `cuentaId`
-- `periodo` con formato `YYYY-MM`
-- `categoria`
-- `estado`
-- `page`, default `1`
-- `limit`, default `20`, máximo `100`
+- período;
+- cuenta;
+- categoría;
+- estado;
+- paginación.
 
-Respuesta:
+Cada movimiento debe mostrar:
 
-```typescript
-interface PaginatedResponse<T> {
-  items: T[];
-  page: number;
-  limit: number;
-  total: number;
-  hasNextPage: boolean;
-}
-```
+- categoría;
+- comercio si existe;
+- fecha;
+- cuenta;
+- estado;
+- monto con formato monetario;
+- origen manual u OCR.
 
-El tipo de item es `TransaccionResponseDTO`. El listado no incluye
+Los gastos se almacenan con signo negativo, pero la UI puede mostrar el monto
+como egreso con formato visual claro. No se deben convertir silenciosamente
+los datos recibidos antes de decidir cómo presentarlos.
 
-### Resumen mensual
+Las transferencias internas no aparecen en este listado porque no son gastos
+ni ingresos económicos.
+
+Estados:
+
+- loading skeleton;
+- lista vacía con CTA `Registrar gasto`;
+- error con reintento;
+- paginación sin duplicar items.
+
+## Slice 5: Análisis
+
+Consumir el mismo endpoint del Home:
 
 ```http
-GET /api/v1/resumen-mensual?periodo=2026-08
+GET /api/v1/resumen-mensual?periodo=YYYY-MM
 ```
 
-Respuesta:
+Mostrar:
 
-```typescript
-interface ResumenMensualDTO {
-  periodo: string;
-  ingresos: number;
-  gastos: number;
-  ahorro: number;
-  margen: number;
-  gastosPorCategoria: GastoCategoriaDTO[];
-  disponibleLiquido: number;
-  deudaTarjetas: number;
-}
+- ingresos;
+- gastos;
+- ahorro;
+- margen;
+- lista de gastos por categoría ordenada por monto;
+- porcentajes devueltos por backend.
 
-interface GastoCategoriaDTO {
-  categoria: Categoria;
-  monto: number;
-  porcentaje: number;
-}
-```
+No recalcular totales en frontend. No mostrar gráficos avanzados hasta tener
+una necesidad concreta y una librería justificada.
 
-Reglas:
+Los períodos sin datos deben comunicarse como ausencia de movimientos, no como
+un rendimiento financiero falso de cero.
 
-- `gastos` se expone como monto positivo, aunque las transacciones se
-  persistan con signo negativo.
-- `ingresos` se calcula desde `Ingreso`.
-- `gastosPorCategoria` consulta únicamente `Transaccion` confirmadas.
-- Las transferencias internas nunca aparecen como gasto ni ingreso.
-- `disponibleLiquido` suma cuentas de activos, excluyendo tarjetas.
-- `deudaTarjetas` representa la deuda de cuentas `TARJETA_CREDITO` por
-  separado.
-- Los meses sin movimientos no se presentan como datos inventados: los
-  agregados deben distinguir ausencia de datos de un cero real cuando el
-  contrato lo requiera.
+## Componentes Compartidos Obligatorios
 
-## Servicios y responsabilidades
+- `AccountSelector`: lista cuentas y saldo actual.
+- `CategorySelector`: grid único de siete categorías.
+- `DateField`: Hoy, Ayer y selector completo.
+- `MoneyInput`: entrada positiva para gastos.
+- `CuentaResumen`: representación compacta de cuenta y saldo.
+- `LoadingState`: skeletons según la forma final.
+- `EmptyState`: mensaje y acción contextual.
+- `ErrorState`: mensaje del `ApiError` y reintento.
+- `BottomNavigation`: Inicio, Movimientos, (+), Análisis y Metas.
 
-### Normalizacion de montos
+## Cliente API
 
-Crear una función de dominio reutilizable para gastos:
+Centralizar en `frontend/src/api/`:
 
-```typescript
-function normalizarMontoGasto(monto: string | number): string;
-```
+- URL base desde `VITE_API_URL`.
+- Header Bearer.
+- `response.ok` y parseo de `ApiError`.
+- Tipos espejo de los DTOs backend.
+- Funciones por recurso:
+  - `listCuentas()`;
+  - `crearCuenta()`;
+  - `listTransacciones()`;
+  - `crearGasto()`;
+  - `getResumenMensual()`.
 
-Reglas:
+Ningún componente debe construir URLs ni headers manualmente.
 
-- Acepta formatos numéricos válidos.
-- Rechaza monto cero o inválido.
-- Convierte siempre a valor negativo.
-- Conserva precisión decimal compatible con el schema.
-- No cambia el signo de una transacción existente durante una lectura.
+## Orden de Implementacion
 
-### Saldo
+1. Validar el scaffold actual con `npm install`, `npm run build` y lint.
+2. Separar el cliente API y los tipos de DTO.
+3. Implementar conexión por token y carga de cuentas.
+4. Implementar onboarding de alta de cuenta.
+5. Implementar Home real con cuentas y resumen mensual.
+6. Implementar `AccountSelector` y conectarlo al formulario.
+7. Implementar registro manual de gasto.
+8. Implementar Movimientos con filtros y paginación.
+9. Implementar Análisis reutilizando el resumen mensual.
+10. Agregar tests de cliente, componentes y flujos críticos.
+11. Verificar responsive, modo claro/oscuro y accesibilidad.
 
-`calcularSaldo(cuentaId)` debe:
+## Criterios de Terminado
 
-1. Leer `Cuenta.saldoInicial`.
-2. Sumar únicamente `Transaccion` con `estado = CONFIRMADA`.
-3. Restar transferencias salientes.
-4. Sumar transferencias entrantes.
-5. No modificar ninguna fila.
+La primera vertical frontend está terminada cuando el usuario puede:
 
-### Agregacion mensual
+- conectar la PWA con un token durante la sesión;
+- crear una cuenta si todavía no tiene ninguna;
+- ver sus cuentas y saldos derivados;
+- ver disponible líquido y deuda de tarjetas por separado;
+- registrar únicamente gastos manuales;
+- recibir feedback con el saldo actualizado;
+- consultar movimientos reales con filtros;
+- consultar análisis mensual real;
+- navegar entre Inicio, Movimientos, Agregar, Análisis y Metas;
+- distinguir loading, vacío y error sin datos ficticios;
+- usar la interfaz en móvil y escritorio.
 
-Crear una única función de agregación para que Home y Análisis no implementen
-cálculos independientes. Esta función debe consultar solamente las fuentes
-correspondientes a cada concepto y excluir transferencias de los reportes
-económicos.
+## Siguientes Slices
 
-## Migracion de datos
-
-La base actual contiene transacciones históricas creadas antes de formalizar la
-convención de signos. No se debe invertir automáticamente el signo de todas
-las filas existentes: algunos movimientos pueden tener significado distinto y
-una migración ciega podría corromper saldos reales.
-
-Antes de producción:
-
-1. Auditar transacciones existentes y clasificarlas.
-2. Definir una migración explícita por lote o un reset de la base local de
-   desarrollo.
-3. Verificar saldo por cuenta antes y después.
-4. Ejecutar los tests de regresión de saldo.
-
-## DTOs
-
-Crear mappers explícitos:
-
-- `toCuentaDTO(cuenta, saldoCalculado)`
-- `toTransaccionDTO({ transaccion, cuenta })`
-- `toResumenMensualDTO(data)`
-- `toPaginatedDTO(items, page, limit, total)`
-
-Toda cuenta anidada debe componerse mediante `toCuentaResumenDTO()`.
-
-## Tests de aceptación
-
-### Dominio
-
-- Crear gasto de `150` persiste `-150`.
-- Crear gasto de `-150` no lo transforma en `150`.
-- Gasto confirmado reduce saldo.
-- Gasto pendiente no modifica saldo.
-- Corrección OCR confirma y reduce saldo una sola vez.
-- Reintento idempotente no duplica el gasto.
-- Transferencia no crea `Transaccion`.
-- Transferencia reduce origen y aumenta destino mediante `calcularSaldo()`.
-- `saldoInicial` no cambia en ningún flujo.
-
-### HTTP
-
-- `POST /api/v1/cuentas` devuelve `CuentaResponseDTO`.
-- `GET /api/v1/cuentas` devuelve saldos derivados.
-- `GET /api/v1/transacciones` devuelve paginación y DTOs, sin campos ORM no
-  expuestos.
-- Los filtros de transacciones funcionan por cuenta, período, categoría y
-  estado.
-- `GET /api/v1/resumen-mensual` calcula gastos solo desde transacciones.
-- Las transferencias no alteran totales de gastos ni ingresos.
-- Los errores usan `ErrorResponseDTO`.
-- Las cuentas dentro de respuestas usan `CuentaResumenDTO`.
-
-## Orden de ejecucion
-
-1. Implementar y probar `normalizarMontoGasto()`.
-2. Ajustar creación manual/OCR y tests de signos.
-3. Ajustar `calcularSaldo()` y tests de saldos.
-4. Agregar DTO completo de cuenta.
-5. Implementar `POST/GET /api/v1/cuentas`.
-6. Implementar `GET /api/v1/transacciones` con paginación y filtros.
-7. Implementar el servicio único de resumen mensual.
-8. Implementar `GET /api/v1/resumen-mensual`.
-9. Agregar tests HTTP de todos los contratos.
-10. Recién después conectar el frontend a datos reales.
-
-## Criterio de terminado
-
-La slice está terminada cuando el frontend puede:
-
-- crear y listar cuentas;
-- consultar el saldo derivado de cada cuenta;
-- registrar un gasto y recibir el saldo actualizado en la respuesta;
-- listar movimientos reales con filtros;
-- consultar ingresos, gastos y categorías de un período;
-- distinguir disponible líquido de deuda de tarjetas;
-- hacerlo sin que ninguna transferencia interna aparezca como gasto o ingreso;
-- recibir errores con el contrato único de error.
+- Transferencias entre cuentas.
+- OCR y corrección de pendientes.
+- Widget unificado de pendientes/vencidos.
+- Alta de ingresos cuando exista el contrato backend.
+- Recurrentes y resúmenes.
+- IndexedDB y soporte offline.
+- Web Push.
+- Metas de ahorro.

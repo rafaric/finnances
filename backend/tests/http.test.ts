@@ -31,9 +31,13 @@ function assertTransaccionShape(body: any) {
   if (typeof body.categoria !== "string") throw new Error("categoria must be string");
   if (typeof body.fecha !== "string") throw new Error("fecha must be ISO string");
   if (typeof body.estado !== "string") throw new Error("estado must be string");
-  if (typeof body.cuenta?.id !== "string") throw new Error("cuenta.id must be string");
-  if (typeof body.cuenta?.nombre !== "string") throw new Error("cuenta.nombre must be string");
-  if (typeof body.cuenta?.saldoActual !== "number") throw new Error("cuenta.saldoActual must be number");
+  if (body.estado === "CONFIRMADA") {
+    if (typeof body.cuenta?.id !== "string") throw new Error("confirmed cuenta.id must be string");
+    if (typeof body.cuenta?.nombre !== "string") throw new Error("confirmed cuenta.nombre must be string");
+    if (typeof body.cuenta?.saldoActual !== "number") throw new Error("confirmed cuenta.saldoActual must be number");
+  } else if (body.cuenta !== undefined && typeof body.cuenta?.id !== "string") {
+    throw new Error("pending cuenta must be absent or include an id");
+  }
 }
 
 function assertTransferenciaShape(body: any) {
@@ -107,7 +111,7 @@ async function run() {
   {
     const res = await app.inject({
       method: "POST", url: "/api/v1/cuentas", headers: AUTH,
-      payload: { nombre: "Banco Test", tipo: "CUENTA_BANCARIA", saldoInicial: "1000", banco: "Galicia", diaCierre: 5, diaPago: 15 },
+      payload: { nombre: "Banco Test", tipo: "CUENTA_BANCARIA", saldoInicial: "1000", banco: "Galicia", nombreEntidad: `Banco Galicia ${ts}`, diaCierre: 5, diaPago: 15 },
     });
     if (res.statusCode !== 201) throw new Error(`POST /cuentas: expected 201, got ${res.statusCode} — ${res.body}`);
     const body = res.json();
@@ -117,11 +121,33 @@ async function run() {
     if (body.saldoInicial !== 1000) throw new Error(`saldoInicial should be 1000, got ${body.saldoInicial}`);
     if (body.saldoActual !== 1000) throw new Error(`saldoActual should be 1000, got ${body.saldoActual}`);
     if (body.banco !== "Galicia") throw new Error("banco mismatch");
+    if (body.nombreEntidad !== `banco galicia ${ts}`) throw new Error("nombreEntidad should be normalized");
     if (body.diaCierre !== 5) throw new Error("diaCierre mismatch");
     if (body.diaPago !== 15) throw new Error("diaPago mismatch");
     cuentaId = body.id;
     cuenta = { id: cuentaId, saldoInicial: "1000" };
     console.log("✓ POST /api/v1/cuentas — CuentaResponseDTO shape + values");
+  }
+
+  // 3b. PATCH /api/v1/cuentas/:id — editable fields only
+  {
+    const res = await app.inject({
+      method: "PATCH", url: `/api/v1/cuentas/${cuentaId}`, headers: AUTH,
+      payload: { nombre: "Banco Test Editado", nombreEntidad: `Banco Nacion ${ts}` },
+    });
+    if (res.statusCode !== 200) throw new Error(`PATCH /cuentas: expected 200, got ${res.statusCode} — ${res.body}`);
+    const body = res.json();
+    if (body.nombre !== "Banco Test Editado" || body.nombreEntidad !== `banco nacion ${ts}`) throw new Error("account editable fields mismatch");
+    if (body.tipo !== "CUENTA_BANCARIA" || body.saldoInicial !== 1000) throw new Error("account immutable fields changed");
+    console.log("✓ PATCH /cuentas/:id — editable fields and normalization");
+
+    const duplicate = await app.inject({
+      method: "PATCH", url: `/api/v1/cuentas/${cuentaB.id}`, headers: AUTH,
+      payload: { nombreEntidad: `Banco Nacion ${ts}` },
+    });
+    if (duplicate.statusCode !== 400) throw new Error(`duplicate entity: expected 400, got ${duplicate.statusCode}`);
+    assertErrorShape(duplicate.json(), "BAD_REQUEST");
+    console.log("✓ PATCH /cuentas/:id — duplicate entity rejected");
   }
 
   // 4. GET /api/v1/cuentas — array of CuentaResponseDTO with derived saldos
@@ -240,6 +266,32 @@ async function run() {
     if (typeof body.textoCrudoOCR !== "string") throw new Error("textoCrudoOCR must be string");
     ocrId = body.id;
     console.log("✓ POST /api/v1/gastos/ocr — TransaccionResponseDTO shape");
+  }
+
+  // 6b. GET /api/v1/pendientes + correction with account assignment
+  {
+    const pendingRes = await app.inject({
+      method: "POST", url: "/api/v1/gastos/ocr", headers: AUTH,
+      payload: { textoCrudo: "Comprobante sin cuenta $1", idempotencyKey: `http-ocr-pending-${ts}` },
+    });
+    if (pendingRes.statusCode !== 202) throw new Error(`POST unresolved OCR: expected 202, got ${pendingRes.statusCode}`);
+    const pending = pendingRes.json();
+    if (pending.cuenta !== undefined) throw new Error("unresolved pending should not include account");
+
+    const listRes = await app.inject({ method: "GET", url: "/api/v1/pendientes", headers: AUTH });
+    if (listRes.statusCode !== 200) throw new Error(`GET /pendientes: expected 200, got ${listRes.statusCode}`);
+    const pendingItems = listRes.json();
+    if (!pendingItems.some((item: any) => item.id === pending.id)) throw new Error("pending item missing from endpoint");
+
+    const correctionRes = await app.inject({
+      method: "PATCH", url: `/api/v1/gastos/ocr/${pending.id}/corregir`, headers: AUTH,
+      payload: { monto: "1", categoria: "OTROS", cuentaId },
+    });
+    if (correctionRes.statusCode !== 200) throw new Error(`pending correction: expected 200, got ${correctionRes.statusCode} — ${correctionRes.body}`);
+    const corrected = correctionRes.json();
+    assertTransaccionShape(corrected);
+    if (corrected.estado !== "CONFIRMADA" || corrected.cuenta?.id !== cuentaId) throw new Error("pending correction should confirm with assigned account");
+    console.log("✓ GET /api/v1/pendientes + OCR correction account assignment");
   }
 
   // 5. PATCH /api/v1/gastos/ocr/:id/corregir — TransaccionResponseDTO, estado CONFIRMADA

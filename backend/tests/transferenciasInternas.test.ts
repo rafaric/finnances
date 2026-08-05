@@ -64,6 +64,41 @@ async function run() {
     if (transacciones.length !== 0) {
       throw new Error("Expected internal transfers to avoid creating Transaccion records");
     }
+
+    const saldoInsuficienteOrigen = await prisma.cuenta.create({
+      data: { nombre: "Cuenta Saldo Insuficiente", tipo: "EFECTIVO", saldoInicial: "100" },
+    });
+    const saldoInsuficienteDestino = await prisma.cuenta.create({
+      data: { nombre: "Cuenta Destino Insuficiente", tipo: "EFECTIVO", saldoInicial: "0" },
+    });
+    const rejectedIdempotencyKey = `transferencia-insuficiente-${Date.now()}`;
+    let rejected = false;
+    try {
+      await crearTransferenciaInterna(prisma, {
+        cuentaOrigenId: saldoInsuficienteOrigen.id,
+        cuentaDestinoId: saldoInsuficienteDestino.id,
+        monto: "100.01",
+        idempotencyKey: rejectedIdempotencyKey,
+      });
+    } catch (error) {
+      rejected = error instanceof Error && error.message === "Saldo insuficiente para la transferencia";
+    }
+    if (!rejected) throw new Error("Expected insufficient balance transfer to be rejected");
+    const rejectedTransfer = await prisma.transferenciaInterna.findUnique({
+      where: { idempotencyKey: rejectedIdempotencyKey },
+    });
+    if (rejectedTransfer) throw new Error("Expected rejected transfer not to be persisted");
+
+    const exactTransfer = await crearTransferenciaInterna(prisma, {
+      cuentaOrigenId: saldoInsuficienteOrigen.id,
+      cuentaDestinoId: saldoInsuficienteDestino.id,
+      monto: "100",
+      nota: "Transferencia exacta",
+      idempotencyKey: `transferencia-exacta-${Date.now()}`,
+    });
+    if (exactTransfer.monto.toString() !== "100") {
+      throw new Error("Expected exact-balance transfer to be accepted");
+    }
   } finally {
     await prisma.$disconnect();
   }

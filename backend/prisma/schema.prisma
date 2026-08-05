@@ -78,6 +78,7 @@ model Cuenta {
   nombre              String
   tipo                TipoCuenta
   banco               String?
+  nombreEntidad       String?    @unique
   ultimosDigitos      String?
   esPrincipal         Boolean    @default(false)
   esCuentaPuente      Boolean    @default(false)
@@ -126,8 +127,8 @@ model Transaccion {
   cotizacionUsada          Decimal?
   comercio                 String?
   origen                   OrigenTransaccion
-  cuentaId                 String
-  cuenta                   Cuenta                    @relation(fields: [cuentaId], references: [id])
+  cuentaId                 String?
+  cuenta                   Cuenta?                   @relation(fields: [cuentaId], references: [id])
   categoria                Categoria
   subcategoriaId           String?
   subcategoria             Subcategoria?             @relation(fields: [subcategoriaId], references: [id])
@@ -135,6 +136,7 @@ model Transaccion {
   estado                   EstadoTransaccion         @default(CONFIRMADA)
   idempotencyKey           String                    @unique
   textoCrudoOCR            String?
+  esTransferenciaAPersona  Boolean                   @default(false)
   createdAt                DateTime                  @default(now())
   cuota                    Cuota?                    @relation("TransaccionCuota")
   instanciaGastoRecurrente InstanciaGastoRecurrente? @relation("TransaccionInstanciaRecurrente")

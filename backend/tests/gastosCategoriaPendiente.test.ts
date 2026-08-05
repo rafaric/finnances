@@ -30,6 +30,21 @@ async function run() {
       throw new Error("Expected OCR transaction to be PENDIENTE_CATEGORIA");
     }
 
+    const personTransfer = await crearTransaccionOCR(prisma, {
+      textoCrudo: "Transferencia de 250 a Juan Perez, categoria OTROS",
+      cuentaId: cuenta.id,
+      idempotencyKey: "ocr-person-transfer-" + Date.now(),
+      data: {
+        monto: 250,
+        categoria: "OTROS",
+        comercio: "Juan Perez",
+        esTransferenciaAPersona: true,
+      },
+    });
+    if (personTransfer.estado !== "PENDIENTE_CATEGORIA" || !personTransfer.esTransferenciaAPersona) {
+      throw new Error("Expected person transfer OCR transaction to require category review");
+    }
+
     const resolved = await resolverCategoriaPendienteTransaccion(
       prisma,
       pending.id,
