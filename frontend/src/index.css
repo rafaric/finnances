@@ -716,6 +716,48 @@ fieldset {
   background: #e1eee6;
   color: #173f30;
 }
+.recurring-due-widget {
+  display: grid;
+  gap: 10px;
+  margin: 18px 0;
+  padding: 16px;
+  border: 1px solid #d2dfd7;
+  border-radius: 16px;
+  background: #fbfdfb;
+}
+.recurring-due-widget .section-heading {
+  margin-bottom: 2px;
+}
+.recurring-due-widget .section-heading > span {
+  color: #60766b;
+  font-size: 0.78rem;
+}
+.recurring-due-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #e1e9e4;
+}
+.recurring-due-row > div {
+  display: grid;
+  gap: 3px;
+}
+.recurring-due-row span {
+  color: #60766b;
+  font-size: 0.78rem;
+}
+.recurring-due-row button {
+  min-height: 32px;
+  padding: 5px 9px;
+  border: 1px solid #cbd9d1;
+  border-radius: 9px;
+  background: transparent;
+  color: #385347;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
 .recurring-all-days {
   padding: 10px;
   border: 1px solid #d2dfd7;

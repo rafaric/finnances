@@ -218,6 +218,17 @@ export function listarInstanciasRecurrentes(token: string): Promise<InstanciaRec
   return request<InstanciaRecurrenteResponseDTO[]>(token, "/api/v1/recurrentes/instancias");
 }
 
+export function proyectarRecurrentes(token: string, periodo: string): Promise<InstanciaRecurrenteResponseDTO[]> {
+  return request<InstanciaRecurrenteResponseDTO[]>(token, "/api/v1/recurrentes/proyectar", {
+    method: "POST",
+    body: JSON.stringify({ periodo }),
+  });
+}
+
+export function listarInstanciasProximas(token: string, dias = 4): Promise<InstanciaRecurrenteResponseDTO[]> {
+  return request<InstanciaRecurrenteResponseDTO[]>(token, `/api/v1/recurrentes/proximas?dias=${dias}`);
+}
+
 export function generarInstanciaRecurrente(token: string, recurrenteId: string): Promise<InstanciaRecurrenteResponseDTO> {
   return request<InstanciaRecurrenteResponseDTO>(token, `/api/v1/recurrentes/${encodeURIComponent(recurrenteId)}/instancia`, { method: "POST" });
 }

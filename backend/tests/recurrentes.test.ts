@@ -4,6 +4,7 @@ import {
   crearRecurrente,
   generarInstanciaRecurrente,
   omitirInstanciaRecurrente,
+  proyectarInstanciasDelPeriodo,
 } from "../src/services/recurrente";
 
 const prisma = new PrismaClient();
@@ -29,6 +30,8 @@ async function run() {
     const first = await generarInstanciaRecurrente(prisma, recurrente.id, new Date("2026-08-05T00:00:00.000Z"));
     const second = await generarInstanciaRecurrente(prisma, recurrente.id, new Date("2026-08-20T00:00:00.000Z"));
     if (first.id !== second.id || first.estado !== "PROYECTADO") throw new Error("projection must be idempotent for the month");
+    const batch = await proyectarInstanciasDelPeriodo(prisma, "2026-10");
+    if (batch.length !== 1 || batch[0].gastoRecurrenteId !== recurrente.id) throw new Error("monthly projection should create one instance per active recurring expense");
 
     const confirmed = await confirmarInstanciaRecurrente(prisma, first.id);
     if (confirmed.estado !== "CONFIRMADO" || !confirmed.transaccionId) throw new Error("confirmation should create a transaction");

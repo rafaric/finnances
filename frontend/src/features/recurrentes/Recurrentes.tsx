@@ -1,16 +1,11 @@
 import { useEffect, useState } from "react";
 import {
-  confirmarInstanciaRecurrente,
   crearRecurrente,
-  generarInstanciaRecurrente,
-  listarInstanciasRecurrentes,
   listarRecurrentes,
-  omitirInstanciaRecurrente,
 } from "../../api/client";
 import type {
   CuentaResponseDTO,
   GastoRecurrenteResponseDTO,
-  InstanciaRecurrenteResponseDTO,
 } from "../../api/types";
 import { CategorySelector } from "../../components/CategorySelector";
 import { AccountPicker } from "../../components/AccountPicker";
@@ -25,10 +20,6 @@ interface RecurrentesProps {
 
 function currency(value: number): string {
   return new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(Number(value));
-}
-
-function date(value: string): string {
-  return new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "short" }).format(new Date(value));
 }
 
 function daysUntilDue(day: number): string {
@@ -46,7 +37,6 @@ function daysUntilDue(day: number): string {
 
 export function Recurrentes({ token, accounts }: RecurrentesProps) {
   const [items, setItems] = useState<GastoRecurrenteResponseDTO[]>([]);
-  const [instances, setInstances] = useState<InstanciaRecurrenteResponseDTO[]>([]);
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
   const [accountId, setAccountId] = useState(accounts[0]?.id ?? "");
@@ -63,9 +53,8 @@ export function Recurrentes({ token, accounts }: RecurrentesProps) {
     setIsLoading(true);
     setError(undefined);
     try {
-      const [nextItems, nextInstances] = await Promise.all([listarRecurrentes(token), listarInstanciasRecurrentes(token)]);
+      const nextItems = await listarRecurrentes(token);
       setItems(nextItems);
-      setInstances(nextInstances);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "No se pudieron cargar los recurrentes.");
     } finally {
@@ -86,19 +75,6 @@ export function Recurrentes({ token, accounts }: RecurrentesProps) {
     }
   }
 
-  async function generate(item: GastoRecurrenteResponseDTO) {
-    try { await generarInstanciaRecurrente(token, item.id); await load(); }
-    catch (requestError) { setError(requestError instanceof Error ? requestError.message : "No se pudo generar la instancia."); }
-  }
-
-  async function resolve(instance: InstanciaRecurrenteResponseDTO, action: "confirmar" | "omitir") {
-    try {
-      if (action === "confirmar") await confirmarInstanciaRecurrente(token, instance.id);
-      else await omitirInstanciaRecurrente(token, instance.id);
-      await load();
-    } catch (requestError) { setError(requestError instanceof Error ? requestError.message : "No se pudo resolver la instancia."); }
-  }
-
   const isCustomDay = ![1, 3, 5, 10, 15, 20, 25].includes(Number(day));
 
   return <section className="recurrentes-page">
@@ -116,8 +92,7 @@ export function Recurrentes({ token, accounts }: RecurrentesProps) {
       </section>
     </div> : null}
     {isLoading ? <LoadingState label="Cargando recurrentes..." /> : error ? <ErrorState message={error} onRetry={() => void load()} /> : <>
-      <div className="recurrente-list">{items.length ? items.map((item) => <article className="recurrente-card" key={item.id}><div><strong>{item.nombre}</strong><span>{daysUntilDue(item.diaDelMes)}</span></div><b>{currency(item.montoFijo)}</b><button type="button" title="Crea el vencimiento para poder confirmarlo u omitirlo" onClick={() => void generate(item)}>Proyectar vencimiento</button></article>) : <p className="empty-page">No hay gastos recurrentes creados.</p>}</div>
-      {instances.length ? <div className="recurrente-instances"><h3>Instancias proyectadas</h3>{instances.map((instance) => <article className="recurrente-card" key={instance.id}><div><strong>{instance.gastoRecurrente.nombre}</strong><span>{date(instance.fechaVencimiento)} · {instance.gastoRecurrente.cuenta.nombre}</span></div><b>{currency(instance.monto)}</b><button type="button" onClick={() => void resolve(instance, "confirmar")}>Confirmar</button><button type="button" onClick={() => void resolve(instance, "omitir")}>Omitir</button></article>)}</div> : null}
+      <div className="recurrente-list">{items.length ? items.map((item) => <article className="recurrente-card" key={item.id}><div><strong>{item.nombre}</strong><span>{daysUntilDue(item.diaDelMes)}</span></div><b>{currency(item.montoFijo)}</b></article>) : <p className="empty-page">No hay gastos recurrentes creados.</p>}</div>
     </>}
   </section>;
 }

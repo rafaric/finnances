@@ -82,9 +82,52 @@ export async function generarInstanciaRecurrente(prisma: PrismaClient, recurrent
   });
 }
 
+export async function proyectarInstanciasDelPeriodo(prisma: PrismaClient, periodo: string) {
+  const match = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(periodo);
+  if (!match) throw new Error("Período inválido");
+  const year = Number(match[1]);
+  const month = Number(match[2]) - 1;
+  const recurrentes = await prisma.gastoRecurrente.findMany({
+    where: { activo: true, tipoMonto: TipoMonto.FIJO, frecuencia: Frecuencia.MENSUAL },
+  });
+
+  const instances = await Promise.all(recurrentes.map((recurrente) => {
+    if (!recurrente.montoFijo || !recurrente.diaDelMes) return null;
+    return prisma.instanciaGastoRecurrente.upsert({
+      where: {
+        gastoRecurrenteId_fechaVencimiento: {
+          gastoRecurrenteId: recurrente.id,
+          fechaVencimiento: monthlyDate(year, month, recurrente.diaDelMes),
+        },
+      },
+      update: {},
+      create: {
+        gastoRecurrenteId: recurrente.id,
+        fechaVencimiento: monthlyDate(year, month, recurrente.diaDelMes),
+        monto: recurrente.montoFijo,
+        montoEsEstimado: false,
+      },
+    });
+  }));
+
+  return instances.filter((instance): instance is NonNullable<typeof instance> => instance !== null);
+}
+
 export function listarInstanciasRecurrentes(prisma: PrismaClient) {
   return prisma.instanciaGastoRecurrente.findMany({
     where: { estado: { in: [EstadoInstanciaRecurrente.PROYECTADO] } },
+    include: { gastoRecurrente: { include: { cuenta: true, categoria: true, subcategoria: true } }, transaccion: true },
+    orderBy: { fechaVencimiento: "asc" },
+  });
+}
+
+export async function listarInstanciasProximas(prisma: PrismaClient, dias: number) {
+  const today = new Date();
+  const end = new Date(today);
+  end.setHours(23, 59, 59, 999);
+  end.setDate(end.getDate() + dias);
+  return prisma.instanciaGastoRecurrente.findMany({
+    where: { estado: EstadoInstanciaRecurrente.PROYECTADO, fechaVencimiento: { lte: end } },
     include: { gastoRecurrente: { include: { cuenta: true, categoria: true, subcategoria: true } }, transaccion: true },
     orderBy: { fechaVencimiento: "asc" },
   });

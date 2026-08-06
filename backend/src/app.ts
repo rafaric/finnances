@@ -27,8 +27,10 @@ import {
   crearRecurrente,
   generarInstanciaRecurrente,
   listarInstanciasRecurrentes,
+  listarInstanciasProximas,
   listarRecurrentes,
   omitirInstanciaRecurrente,
+  proyectarInstanciasDelPeriodo,
 } from "./services/recurrente";
 
 function normalizeEntity(value: string): string {
@@ -643,6 +645,28 @@ export function buildApp(prisma: PrismaClient) {
   app.get("/api/v1/recurrentes", async (_request, reply) => reply.send(await listarRecurrentes(prisma)));
 
   app.get("/api/v1/recurrentes/instancias", async (_request, reply) => reply.send(await listarInstanciasRecurrentes(prisma)));
+
+  app.post("/api/v1/recurrentes/proyectar", async (request, reply) => {
+    try {
+      const { periodo } = z.object({ periodo: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/) }).parse(request.body);
+      return reply.send(await proyectarInstanciasDelPeriodo(prisma, periodo));
+    } catch (error) {
+      if (error instanceof ZodError) return fromZodError(reply, error);
+      if (error instanceof Error) return fromDomainError(reply, error);
+      return internalError(reply);
+    }
+  });
+
+  app.get("/api/v1/recurrentes/proximas", async (request, reply) => {
+    try {
+      const { dias } = z.object({ dias: z.coerce.number().int().min(0).max(31).default(4) }).parse(request.query);
+      return reply.send(await listarInstanciasProximas(prisma, dias));
+    } catch (error) {
+      if (error instanceof ZodError) return fromZodError(reply, error);
+      if (error instanceof Error) return fromDomainError(reply, error);
+      return internalError(reply);
+    }
+  });
 
   app.post("/api/v1/recurrentes/:id/instancia", async (request, reply) => {
     try {
