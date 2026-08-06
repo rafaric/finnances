@@ -452,8 +452,18 @@ fieldset legend,
 .form-field small {
   font-weight: 500;
 }
-.remember-connection { display: flex; align-items: center; gap: 9px; color: #60766b; font-size: 0.82rem; }
-.remember-connection input { width: 17px; height: 17px; accent-color: #173f30; }
+.remember-connection {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: #60766b;
+  font-size: 0.82rem;
+}
+.remember-connection input {
+  width: 17px;
+  height: 17px;
+  accent-color: #173f30;
+}
 .date-section {
   display: flex;
   align-items: center;
@@ -584,19 +594,44 @@ fieldset {
   font-size: 1.25rem;
   display: inline-block;
   line-height: 1;
+  margin-right: 10px;
 }
-.icon-utensilios_cocina::before { content: "🍽️"; }
-.icon-carro::before { content: "🚌"; }
-.icon-casa::before { content: "🏠"; }
-.icon-llave::before { content: "🔑"; }
-.icon-telefono::before { content: "📞"; }
-.icon-corazon::before { content: "💘"; }
-.icon-oculos::before { content: "🕶️"; }
-.icon-super::before { content: "🛒"; }
-.icon-gimnasio::before { content: "💪"; }
-.icon-libros::before { content: "📚"; }
-.icon-avion::before { content: "✈️"; }
-.icon-otro::before { content: "📦"; }
+.icon-utensilios_cocina::before {
+  content: "🍽️";
+}
+.icon-carro::before {
+  content: "🚌";
+}
+.icon-casa::before {
+  content: "🏠";
+}
+.icon-llave::before {
+  content: "🔑";
+}
+.icon-telefono::before {
+  content: "📞";
+}
+.icon-corazon::before {
+  content: "💘";
+}
+.icon-oculos::before {
+  content: "🕶️";
+}
+.icon-super::before {
+  content: "🛒";
+}
+.icon-gimnasio::before {
+  content: "💪";
+}
+.icon-libros::before {
+  content: "📚";
+}
+.icon-avion::before {
+  content: "✈️";
+}
+.icon-otro::before {
+  content: "📦";
+}
 .subcategory-pills button.selected {
   border-color: #173f30;
   background: #e1eee6;
