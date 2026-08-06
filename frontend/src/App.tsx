@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { actualizarCuenta, crearCuenta, crearGasto, crearIngreso, crearTransferencia, getResumenMensual, listCuentas, listPendientes } from "./api/client";
 import type { CuentaResponseDTO, ResumenMensualDTO, TipoCuenta, TransaccionResponseDTO } from "./api/types";
 import { CategorySelector } from "./components/CategorySelector";
+import { AccountPicker } from "./components/AccountPicker";
 import { MoneyInput } from "./components/MoneyInput";
 import { Home } from "./features/home/Home";
 import { Movimientos } from "./features/movimientos/Movimientos";
@@ -54,7 +55,6 @@ function App() {
   const [accountName, setAccountName] = useState("");
   const [accountEntity, setAccountEntity] = useState("");
   const [isAccountsOpen, setIsAccountsOpen] = useState(false);
-  const [isExpenseAccountOpen, setIsExpenseAccountOpen] = useState(false);
   const [editingAccountId, setEditingAccountId] = useState<string>();
   const [accountFormSaving, setAccountFormSaving] = useState(false);
   const [accountType, setAccountType] = useState<TipoCuenta>("EFECTIVO");
@@ -423,11 +423,7 @@ function App() {
              </div>
            </div>
 
-           <div className="account-note">
-             <button className="account-picker-button" type="button" disabled={accounts.length === 0} onClick={() => setIsExpenseAccountOpen(true)}>
-               <span>Cuenta</span><strong>{accounts.find((account) => account.id === selectedAccountId)?.nombre ?? "No hay cuentas configuradas"}</strong><b>{currency(accounts.find((account) => account.id === selectedAccountId)?.saldoActual ?? 0)}</b>
-             </button>
-           </div>
+            <AccountPicker accounts={accounts} value={selectedAccountId} onChange={setSelectedAccountId} disabled={!accounts.length} />
 
             <CategorySelector token={connection.token} tipo={transactionType} categoriaId={categoriaId} subcategoriaId={subcategoriaId} onCategoriaChange={setCategoriaId} onSubcategoriaChange={setSubcategoriaId} />
             {transactionType === "INGRESO" ? <label className="form-field"><span>Disponible en</span><input type="month" value={incomePeriod} onChange={(event) => setIncomePeriod(event.target.value)} /></label> : null}
@@ -443,15 +439,6 @@ function App() {
            </button>
         </form>
       ) : null}
-
-      {isExpenseAccountOpen ? <div className="modal-backdrop" role="presentation">
-        <section className="account-picker-modal" aria-labelledby="expense-account-title">
-          <div className="section-heading"><h2 id="expense-account-title">Elegir cuenta</h2><button className="icon-button" type="button" aria-label="Cerrar" title="Cerrar" onClick={() => setIsExpenseAccountOpen(false)}><X size={19} /></button></div>
-          <div className="account-picker-list">
-            {accounts.map((account) => <button className={account.id === selectedAccountId ? "selected" : ""} type="button" key={account.id} onClick={() => { setSelectedAccountId(account.id); setIsExpenseAccountOpen(false); }}><span>{account.nombre}</span><strong>{currency(account.saldoActual)}</strong></button>)}
-          </div>
-        </section>
-      </div> : null}
 
       {screen === "movimientos" ? <Movimientos token={connection.token} accounts={accounts} onRegisterExpense={() => setScreen("nuevo")} /> : null}
 

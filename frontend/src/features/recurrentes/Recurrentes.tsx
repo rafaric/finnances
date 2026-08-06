@@ -13,8 +13,10 @@ import type {
   InstanciaRecurrenteResponseDTO,
 } from "../../api/types";
 import { CategorySelector } from "../../components/CategorySelector";
+import { AccountPicker } from "../../components/AccountPicker";
 import { ErrorState } from "../../components/ErrorState";
 import { LoadingState } from "../../components/LoadingState";
+import { MoneyInput } from "../../components/MoneyInput";
 
 interface RecurrentesProps {
   token: string;
@@ -38,6 +40,8 @@ export function Recurrentes({ token, accounts }: RecurrentesProps) {
   const [categoryId, setCategoryId] = useState<string>();
   const [subcategoryId, setSubcategoryId] = useState<string>();
   const [day, setDay] = useState("1");
+  const [customDayOpen, setCustomDayOpen] = useState(false);
+  const [notes, setNotes] = useState("");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string>();
@@ -61,8 +65,8 @@ export function Recurrentes({ token, accounts }: RecurrentesProps) {
   async function submit() {
     if (!categoryId || !accountId) return;
     try {
-      await crearRecurrente(token, { nombre: name, montoFijo: amount, cuentaId: accountId, categoriaId: categoryId, subcategoriaId: subcategoryId, diaDelMes: Number(day) });
-      setName(""); setAmount(""); setCategoryId(undefined); setSubcategoryId(undefined); setIsFormOpen(false);
+      await crearRecurrente(token, { nombre: name, montoFijo: amount, cuentaId: accountId, categoriaId: categoryId, subcategoriaId: subcategoryId, diaDelMes: Number(day), notas: notes || undefined });
+      setName(""); setAmount(""); setNotes(""); setCategoryId(undefined); setSubcategoryId(undefined); setDay("1"); setIsFormOpen(false);
       await load();
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "No se pudo crear el recurrente.");
@@ -86,10 +90,11 @@ export function Recurrentes({ token, accounts }: RecurrentesProps) {
     <div className="section-heading"><div><p className="eyebrow">COMPROMISOS</p><h2>Gastos recurrentes</h2></div><button className="primary-action" type="button" onClick={() => setIsFormOpen((current) => !current)}>+ Nuevo</button></div>
     {isFormOpen ? <div className="recurrente-form">
       <label className="form-field"><span>Nombre</span><input value={name} onChange={(event) => setName(event.target.value)} placeholder="Alquiler, gimnasio..." /></label>
-      <label className="form-field"><span>Monto mensual</span><input type="number" min="0.01" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} /></label>
-      <label className="form-field"><span>Cuenta</span><select value={accountId} onChange={(event) => setAccountId(event.target.value)}>{accounts.map((account) => <option key={account.id} value={account.id}>{account.nombre}</option>)}</select></label>
-      <label className="form-field"><span>Día del mes</span><input type="number" min="1" max="31" value={day} onChange={(event) => setDay(event.target.value)} /></label>
+      <MoneyInput value={amount} onChange={setAmount} />
+      <AccountPicker accounts={accounts} value={accountId} onChange={setAccountId} disabled={!accounts.length} />
+      <div className="recurring-day-field"><span className="recurring-field-label">Día del mes</span><div className="recurring-day-pills">{[1, 3, 5, 10, 15, 20, 25].map((value) => <button className={Number(day) === value && !customDayOpen ? "selected" : ""} key={value} type="button" onClick={() => { setDay(String(value)); setCustomDayOpen(false); }}>{value}</button>)}<button className={customDayOpen ? "selected" : ""} type="button" onClick={() => setCustomDayOpen(true)}>Otro día</button></div>{customDayOpen ? <div className="recurring-all-days">{Array.from({ length: 31 }, (_, index) => index + 1).map((value) => <button className={Number(day) === value ? "selected" : ""} key={value} type="button" onClick={() => { setDay(String(value)); setCustomDayOpen(false); }}>{value}</button>)}</div> : null}</div>
       <CategorySelector token={token} tipo="GASTO" categoriaId={categoryId} subcategoriaId={subcategoryId} onCategoriaChange={setCategoryId} onSubcategoriaChange={setSubcategoryId} />
+      <label className="form-field"><span>Nota <small>(opcional)</small></span><input maxLength={60} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="¿Qué gasto es?" /><small className="character-count">{notes.length}/60</small></label>
       <button className="primary-action" type="button" disabled={!name || !amount || !categoryId} onClick={() => void submit()}>Guardar recurrente</button>
     </div> : null}
     {isLoading ? <LoadingState label="Cargando recurrentes..." /> : error ? <ErrorState message={error} onRetry={() => void load()} /> : <>

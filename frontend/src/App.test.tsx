@@ -108,8 +108,7 @@ describe("App expense form", () => {
     await user.click(screen.getByRole("button", { name: "+" }));
     await user.type(screen.getByRole("spinbutton"), "1250");
     await user.click(screen.getByRole("button", { name: "Ayer" }));
-    await user.click(screen.getByRole("button", { name: /Cuenta principal\$ 10\.000/ }));
-    await user.click(screen.getAllByRole("button", { name: /Cuenta principal/ })[1]);
+    await user.selectOptions(screen.getByRole("combobox", { name: /Cuenta/ }), account.id);
     await user.click(screen.getByRole("button", { name: "Transporte" }));
     await user.type(screen.getByPlaceholderText("¿En qué fue?"), "Carga SUBE");
     await user.click(screen.getByRole("button", { name: "Registrar gasto" }));

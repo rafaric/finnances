@@ -683,6 +683,44 @@ fieldset {
   color: #385347;
   font-weight: 700;
 }
+.recurring-day-field {
+  display: grid;
+  gap: 8px;
+}
+.recurring-field-label {
+  color: #60766b;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+.recurring-day-pills,
+.recurring-all-days {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.recurring-day-pills button,
+.recurring-all-days button {
+  min-width: 38px;
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 1px solid #cbd9d1;
+  border-radius: 18px;
+  background: #fbfdfb;
+  color: #385347;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+.recurring-day-pills button.selected,
+.recurring-all-days button.selected {
+  border-color: #173f30;
+  background: #e1eee6;
+  color: #173f30;
+}
+.recurring-all-days {
+  padding: 10px;
+  border: 1px solid #d2dfd7;
+  border-radius: 14px;
+}
 .account-note {
   padding: 15px;
   border: 1px solid #d2dfd7;
