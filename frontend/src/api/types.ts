@@ -10,21 +10,81 @@ export type TipoCuenta =
   | "CUENTA_BANCARIA"
   | "TARJETA_CREDITO";
 
-export type Categoria =
-  | "COMIDA"
-  | "TRANSPORTE"
-  | "VIVIENDA"
-  | "SERVICIOS"
-  | "OCIO"
-  | "DEUDAS"
-  | "OTROS";
+export type TipoMovimiento = "GASTO" | "INGRESO";
+
+export type IconoCategoria =
+  | "UTENSILIOS_COCINA"
+  | "CARRO"
+  | "CASA"
+  | "LLAVE"
+  | "TELEFONO"
+  | "CORAZON"
+  | "OCULOS"
+  | "SUPER"
+  | "GIMNASIO"
+  | "LIBROS"
+  | "AVION"
+  | "OTRO";
+
+export type ColorCategoria =
+  | "ROJO"
+  | "NARANJA"
+  | "AMARILLO"
+  | "VERDE"
+  | "AZUL"
+  | "INDIGO"
+  | "VIOLETA"
+  | "ROSA"
+  | "PEZ"
+  | "TURQUESA"
+  | "BLANCO"
+  | "NEGRO";
+
+export type TipoCategoria = "GASTO" | "INGRESO";
+
+export interface CategoriaResponseDTO {
+  id: string;
+  nombre: string;
+  icono: IconoCategoria;
+  color: ColorCategoria;
+  tipo: TipoCategoria;
+  activa: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SubcategoriaResponseDTO {
+  id: string;
+  nombre: string;
+  categoriaId: string;
+  categoria: CategoriaResponseDTO;
+}
 
 export type EstadoTransaccion =
   | "CONFIRMADA"
   | "PENDIENTE_REVISION"
   | "PENDIENTE_CATEGORIA";
 
-export type TipoMovimiento = "GASTO" | "INGRESO";
+export interface IngresoResponseDTO {
+  id: string;
+  monto: number;
+  moneda: string;
+  fechaCobro: string;
+  periodoDisponible: string;
+  categoria: CategoriaResponseDTO;
+  subcategoria?: SubcategoriaResponseDTO;
+  cuenta: CuentaResumenDTO;
+}
+
+export interface CrearIngresoInput {
+  monto: string;
+  fechaCobro: string;
+  periodoDisponible: string;
+  cuentaId: string;
+  categoriaId: string;
+  subcategoriaId?: string;
+  idempotencyKey: string;
+}
 
 export type OrigenTransaccion =
   | "APPLE_PAY"
@@ -56,7 +116,8 @@ export interface TransaccionResponseDTO {
   moneda: string;
   comercio?: string;
   origen: OrigenTransaccion;
-  categoria: Categoria;
+  categoria: CategoriaResponseDTO;
+  subcategoria?: SubcategoriaResponseDTO;
   fecha: string;
   estado: EstadoTransaccion;
   cuenta?: CuentaResumenDTO;
@@ -73,7 +134,7 @@ export interface PaginatedResponseDTO<T> {
 }
 
 export interface GastoCategoriaDTO {
-  categoria: Categoria;
+  categoria: CategoriaResponseDTO;
   monto: number;
   porcentaje: number;
 }
@@ -106,20 +167,21 @@ export type ActualizarCuentaInput = Partial<Omit<CrearCuentaInput, "tipo" | "sal
 export interface CrearGastoInput {
   monto: string;
   cuentaId: string;
-  categoria: Categoria;
+  categoriaId: string;
+  subcategoriaId?: string;
   origen: "MANUAL";
   idempotencyKey: string;
   fecha: string;
   comercio?: string;
-  nota?: string;
 }
 
 export interface CorregirOcrInput {
   monto?: string;
-  categoria?: Categoria;
+  categoriaId?: string;
   comercio?: string;
   fecha?: string;
   cuentaId?: string;
+  subcategoriaId?: string;
 }
 
 export interface TransferenciaResponseDTO {
@@ -143,7 +205,7 @@ export interface CrearTransferenciaInput {
 export interface ListTransaccionesParams {
   cuentaId?: string;
   periodo?: string;
-  categoria?: Categoria;
+  categoriaId?: string;
   estado?: EstadoTransaccion;
   tipo?: TipoMovimiento;
   page?: number;

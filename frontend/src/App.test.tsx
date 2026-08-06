@@ -2,25 +2,31 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
-import { actualizarCuenta, crearGasto, crearTransferencia, getResumenMensual, listCuentas, listPendientes } from "./api/client";
-import type { CuentaResponseDTO, ResumenMensualDTO, TransaccionResponseDTO } from "./api/types";
+import { actualizarCuenta, crearGasto, crearIngreso, crearTransferencia, getResumenMensual, listCuentas, listPendientes, listCategorias, listSubcategorias } from "./api/client";
+import type { CuentaResponseDTO, CategoriaResponseDTO, ResumenMensualDTO, TransaccionResponseDTO } from "./api/types";
 
 vi.mock("./api/client", () => ({
   actualizarCuenta: vi.fn(),
   crearCuenta: vi.fn(),
   crearGasto: vi.fn(),
+  crearIngreso: vi.fn(),
   crearTransferencia: vi.fn(),
   listPendientes: vi.fn(),
   getResumenMensual: vi.fn(),
   listCuentas: vi.fn(),
+  listCategorias: vi.fn(),
+  listSubcategorias: vi.fn(),
 }));
 
 const listCuentasMock = vi.mocked(listCuentas);
 const getResumenMensualMock = vi.mocked(getResumenMensual);
 const crearGastoMock = vi.mocked(crearGasto);
+const crearIngresoMock = vi.mocked(crearIngreso);
 const crearTransferenciaMock = vi.mocked(crearTransferencia);
 const actualizarCuentaMock = vi.mocked(actualizarCuenta);
 const listPendientesMock = vi.mocked(listPendientes);
+const listCategoriasMock = vi.mocked(listCategorias);
+const listSubcategoriasMock = vi.mocked(listSubcategorias);
 
 const account: CuentaResponseDTO = {
   id: "account-1",
@@ -34,6 +40,27 @@ const destinationAccount: CuentaResponseDTO = {
   id: "account-2",
   nombre: "Billetera",
   saldoActual: 2500,
+};
+
+const categoriaTransporte: CategoriaResponseDTO = {
+  id: "cat-transporte",
+  nombre: "Transporte",
+  icono: "CARRO",
+  color: "AZUL",
+  tipo: "GASTO",
+  activa: true,
+  createdAt: "2026-01-01T00:00:00.000Z",
+  updatedAt: "2026-01-01T00:00:00.000Z",
+};
+const categoriaSueldo: CategoriaResponseDTO = {
+  id: "cat-sueldo",
+  nombre: "Sueldo",
+  icono: "LIBROS",
+  color: "VERDE",
+  tipo: "INGRESO",
+  activa: true,
+  createdAt: "2026-01-01T00:00:00.000Z",
+  updatedAt: "2026-01-01T00:00:00.000Z",
 };
 
 const summary: ResumenMensualDTO = {
@@ -52,7 +79,7 @@ const transaction: TransaccionResponseDTO = {
   monto: -1250,
   moneda: "ARS",
   origen: "MANUAL",
-  categoria: "TRANSPORTE",
+  categoria: categoriaTransporte,
   fecha: "2026-08-03T00:00:00.000Z",
   estado: "CONFIRMADA",
   esTransferenciaAPersona: false,
@@ -65,6 +92,8 @@ beforeEach(() => {
   listCuentasMock.mockResolvedValue([account]);
   getResumenMensualMock.mockResolvedValue(summary);
   crearGastoMock.mockResolvedValue(transaction);
+  listCategoriasMock.mockResolvedValue([categoriaTransporte]);
+  listSubcategoriasMock.mockResolvedValue([]);
   crearTransferenciaMock.mockReset();
   actualizarCuentaMock.mockReset();
   listPendientesMock.mockResolvedValue([]);
@@ -89,7 +118,7 @@ describe("App expense form", () => {
     expect(crearGastoMock).toHaveBeenCalledWith("token-123", expect.objectContaining({
       monto: "1250",
       cuentaId: "account-1",
-      categoria: "TRANSPORTE",
+      categoriaId: "cat-transporte",
       origen: "MANUAL",
       nota: "Carga SUBE",
       idempotencyKey: expect.any(String),
@@ -176,5 +205,58 @@ describe("App expense form", () => {
     expect(await screen.findByRole("status")).toHaveTextContent("Saldo insuficiente para la transferencia");
     expect(screen.getByRole("spinbutton")).toHaveValue(9000);
     expect(screen.getByPlaceholderText("¿Para qué es?")).toHaveValue("No perder este dato");
+  });
+});
+
+describe("App income form", () => {
+  it("requires an income category before submitting", async () => {
+    const user = userEvent.setup();
+    listCategoriasMock.mockResolvedValue([categoriaSueldo]);
+    render(<App />);
+
+    await screen.findByText("Tu plata, en contexto.");
+    await user.click(screen.getByRole("button", { name: "Registrar ingreso" }));
+    await user.type(screen.getByRole("spinbutton"), "250000");
+    await user.click(screen.getByRole("button", { name: "Registrar ingreso" }));
+
+    expect(crearIngresoMock).not.toHaveBeenCalled();
+    expect(await screen.findByRole("status")).toHaveTextContent("Seleccioná una categoría");
+  });
+
+  it("submits an income with category and optional subcategory", async () => {
+    const user = userEvent.setup();
+    listCategoriasMock.mockResolvedValue([categoriaSueldo]);
+    listSubcategoriasMock.mockResolvedValue([{
+      id: "sub-sueldo-blanco",
+      nombre: "Sueldo en blanco",
+      categoriaId: "cat-sueldo",
+      categoria: categoriaSueldo,
+    }]);
+    crearIngresoMock.mockResolvedValue({
+      id: "income-1",
+      monto: 250000,
+      moneda: "ARS",
+      fechaCobro: "2026-08-03T00:00:00.000Z",
+      periodoDisponible: "2026-08",
+      categoria: categoriaSueldo,
+      cuenta: { id: account.id, nombre: account.nombre, saldoActual: 260000 },
+    });
+    render(<App />);
+
+    await screen.findByText("Tu plata, en contexto.");
+    await user.click(screen.getByRole("button", { name: "Registrar ingreso" }));
+    await user.type(screen.getByRole("spinbutton"), "250000");
+    await user.click(screen.getByRole("button", { name: "Sueldo" }));
+    await user.click(screen.getByRole("button", { name: "Sueldo en blanco" }));
+    await user.click(screen.getByRole("button", { name: "Registrar ingreso" }));
+
+    await waitFor(() => expect(crearIngresoMock).toHaveBeenCalledOnce());
+    expect(crearIngresoMock).toHaveBeenCalledWith("token-123", expect.objectContaining({
+      monto: "250000",
+      cuentaId: account.id,
+      categoriaId: "cat-sueldo",
+      subcategoriaId: "sub-sueldo-blanco",
+      idempotencyKey: expect.any(String),
+    }));
   });
 });

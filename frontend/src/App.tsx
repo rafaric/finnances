@@ -1,16 +1,16 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { actualizarCuenta, crearCuenta, crearGasto, crearTransferencia, getResumenMensual, listCuentas, listPendientes } from "./api/client";
+import { actualizarCuenta, crearCuenta, crearGasto, crearIngreso, crearTransferencia, getResumenMensual, listCuentas, listPendientes } from "./api/client";
 import type { CuentaResponseDTO, ResumenMensualDTO, TipoCuenta, TransaccionResponseDTO } from "./api/types";
 import { CategorySelector } from "./components/CategorySelector";
-import type { Category } from "./components/categories";
 import { MoneyInput } from "./components/MoneyInput";
 import { Home } from "./features/home/Home";
 import { Movimientos } from "./features/movimientos/Movimientos";
 import { Analisis } from "./features/analisis/Analisis";
+import { Categorias } from "./features/categorias/Categorias";
 import { currentPeriod } from "./lib/periods";
 import { Bolt, X } from "lucide-react";
 import "./index.css";
-type Screen = "inicio" | "movimientos" | "nuevo" | "transferir" | "analisis" | "metas";
+type Screen = "inicio" | "movimientos" | "nuevo" | "transferir" | "analisis" | "categorias";
 
 interface Connection {
   token: string;
@@ -30,12 +30,21 @@ function dateValue(offsetDays = 0): string {
   return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
 }
 
+function browserStorage(kind: "local" | "session"): Storage | undefined {
+  try {
+    return kind === "local" ? globalThis.localStorage : globalThis.sessionStorage;
+  } catch {
+    return undefined;
+  }
+}
+
 function App() {
   const [screen, setScreen] = useState<Screen>("inicio");
   const [connection, setConnection] = useState<Connection>(() => ({
-    token: sessionStorage.getItem("finnances.apiToken") ?? "",
+    token: browserStorage("local")?.getItem("finnances.apiToken") ?? browserStorage("session")?.getItem("finnances.apiToken") ?? "",
   }));
   const [draftConnection, setDraftConnection] = useState(connection);
+  const [rememberConnection, setRememberConnection] = useState(() => browserStorage("local")?.getItem("finnances.rememberConnection") === "true");
   const [accounts, setAccounts] = useState<CuentaResponseDTO[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState("");
   const [isLoadingAccounts, setIsLoadingAccounts] = useState(Boolean(connection.token));
@@ -50,10 +59,14 @@ function App() {
   const [accountType, setAccountType] = useState<TipoCuenta>("EFECTIVO");
   const [initialBalance, setInitialBalance] = useState("");
   const [isCreatingAccount, setIsCreatingAccount] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
   const [amount, setAmount] = useState("");
-  const [category, setCategory] = useState<Category>("COMIDA");
+  const [transactionType, setTransactionType] = useState<"GASTO" | "INGRESO">("GASTO");
+  const [categoriaId, setCategoriaId] = useState<string>();
+  const [subcategoriaId, setSubcategoriaId] = useState<string>();
   const [date, setDate] = useState(() => dateValue());
   const [note, setNote] = useState("");
+  const [incomePeriod, setIncomePeriod] = useState(() => currentPeriod());
   const [transferOriginId, setTransferOriginId] = useState("");
   const [transferDestinationId, setTransferDestinationId] = useState("");
   const [transferAmount, setTransferAmount] = useState("");
@@ -62,10 +75,16 @@ function App() {
   const [isSaving, setIsSaving] = useState(false);
   const [notice, setNotice] = useState<string>();
   const [monthlySummary, setMonthlySummary] = useState<ResumenMensualDTO>();
-  const [selectedPeriod, setSelectedPeriod] = useState(currentPeriod());
+  const [selectedPeriod, setSelectedPeriod] = useState("");
+  const period = selectedPeriod || currentPeriod();
   const [isLoadingSummary, setIsLoadingSummary] = useState(Boolean(connection.token));
   const [summaryError, setSummaryError] = useState<string>();
+  const [summaryRefreshVersion, setSummaryRefreshVersion] = useState(0);
   const [pendingItems, setPendingItems] = useState<TransaccionResponseDTO[]>([]);
+
+  useEffect(() => {
+    setSelectedPeriod(currentPeriod());
+  }, []);
 
   async function loadAccounts(token: string) {
     setIsLoadingAccounts(true);
@@ -93,13 +112,13 @@ function App() {
     setSummaryError(undefined);
     void Promise.all([
       loadAccounts(connection.token),
-      getResumenMensual(connection.token, selectedPeriod),
+      getResumenMensual(connection.token, period),
       listPendientes(connection.token),
     ])
       .then(([, summary, pending]) => { setMonthlySummary(summary); setPendingItems(pending); })
       .catch((error) => setSummaryError(error instanceof Error ? error.message : "No se pudo cargar el resumen."))
       .finally(() => setIsLoadingSummary(false));
-  }, [connection.token, selectedPeriod]);
+  }, [connection.token, period, summaryRefreshVersion]);
 
   useEffect(() => {
     if (!notice) return;
@@ -112,9 +131,41 @@ function App() {
     const nextConnection = {
       token: draftConnection.token.trim(),
     };
-    sessionStorage.setItem("finnances.apiToken", nextConnection.token);
+    browserStorage("session")?.removeItem("finnances.apiToken");
+    browserStorage("local")?.removeItem("finnances.apiToken");
+    if (rememberConnection) {
+      browserStorage("local")?.setItem("finnances.apiToken", nextConnection.token);
+      browserStorage("local")?.setItem("finnances.rememberConnection", "true");
+    } else {
+      browserStorage("session")?.setItem("finnances.apiToken", nextConnection.token);
+      browserStorage("local")?.removeItem("finnances.rememberConnection");
+    }
     setConnection(nextConnection);
     setNotice("Conexión guardada para esta sesión.");
+  }
+
+  async function connectWithToken() {
+    const token = draftConnection.token.trim();
+    if (!token) return;
+    setIsConnecting(true);
+    setAccountsError(undefined);
+    try {
+      browserStorage("session")?.removeItem("finnances.apiToken");
+      browserStorage("local")?.removeItem("finnances.apiToken");
+      if (rememberConnection) {
+        browserStorage("local")?.setItem("finnances.apiToken", token);
+        browserStorage("local")?.setItem("finnances.rememberConnection", "true");
+      } else {
+        browserStorage("session")?.setItem("finnances.apiToken", token);
+        browserStorage("local")?.removeItem("finnances.rememberConnection");
+      }
+      setConnection({ token });
+      setNotice("Conexión guardada para esta sesión.");
+    } catch (error) {
+      setAccountsError(error instanceof Error ? error.message : "No se pudo guardar la conexión.");
+    } finally {
+      setIsConnecting(false);
+    }
   }
 
   async function submitAccount(event: FormEvent<HTMLFormElement>) {
@@ -132,7 +183,15 @@ function App() {
         nombreEntidad: accountEntity.trim() || undefined,
         saldoInicial: initialBalance || undefined,
       });
-      sessionStorage.setItem("finnances.apiToken", token);
+       browserStorage("session")?.removeItem("finnances.apiToken");
+       browserStorage("local")?.removeItem("finnances.apiToken");
+       if (rememberConnection) {
+         browserStorage("local")?.setItem("finnances.apiToken", token);
+         browserStorage("local")?.setItem("finnances.rememberConnection", "true");
+       } else {
+         browserStorage("session")?.setItem("finnances.apiToken", token);
+         browserStorage("local")?.removeItem("finnances.rememberConnection");
+       }
       setConnection({ token });
       setAccounts((current) => [...current, account]);
       setSelectedAccountId(account.id);
@@ -176,16 +235,41 @@ function App() {
       setNotice("Configurá una cuenta antes de registrar un gasto.");
       return;
     }
+    if (transactionType === "INGRESO" && !categoriaId) {
+      setNotice("Seleccioná una categoría para registrar el ingreso.");
+      return;
+    }
 
     setIsSaving(true);
     try {
+      if (transactionType === "INGRESO") {
+        const income = await crearIngreso(connection.token, {
+          monto: amount,
+          fechaCobro: date,
+          periodoDisponible: incomePeriod,
+          cuentaId: selectedAccountId,
+          categoriaId: categoriaId!,
+          subcategoriaId,
+          idempotencyKey: crypto.randomUUID(),
+        });
+        setAccounts((current) => current.map((account) => account.id === income.cuenta.id ? { ...account, saldoActual: income.cuenta.saldoActual } : account));
+        setMonthlySummary(undefined);
+        void getResumenMensual(connection.token, period).then(setMonthlySummary).catch(() => undefined);
+        setAmount("");
+        setCategoriaId(undefined);
+        setSubcategoriaId(undefined);
+        setNotice(`Ingreso registrado. Saldo actual: ${currency(income.cuenta.saldoActual)}.`);
+        setScreen("inicio");
+        return;
+      }
       const transaction = await crearGasto(connection.token, {
         monto: amount,
         cuentaId: selectedAccountId,
-        categoria: category,
+        categoriaId: categoriaId ?? "cat-otros",
+        subcategoriaId,
         origen: "MANUAL",
-          fecha: date,
-          nota: note.trim() || undefined,
+        fecha: date,
+        nota: note.trim() || undefined,
         idempotencyKey: crypto.randomUUID(),
       });
       if (!transaction.cuenta) throw new Error("El backend no devolvió la cuenta del gasto confirmado.");
@@ -197,7 +281,7 @@ function App() {
       ));
       setMonthlySummary(undefined);
       if (connection.token) {
-        void getResumenMensual(connection.token, selectedPeriod).then(setMonthlySummary).catch(() => undefined);
+         void getResumenMensual(connection.token, period).then(setMonthlySummary).catch(() => undefined);
       }
       setAmount("");
       setNote("");
@@ -242,7 +326,7 @@ function App() {
         if (account.id === transfer.cuentaDestino.id) return { ...account, saldoActual: transfer.cuentaDestino.saldoActual };
         return account;
       }));
-      void getResumenMensual(connection.token, selectedPeriod).then(setMonthlySummary).catch(() => undefined);
+      void getResumenMensual(connection.token, period).then(setMonthlySummary).catch(() => undefined);
       setTransferAmount("");
       setTransferNote("");
       setNotice(`Transferencia registrada. Saldo origen: ${currency(transfer.cuentaOrigen.saldoActual)}.`);
@@ -271,8 +355,10 @@ function App() {
           isLoadingSummary={isLoadingSummary}
           accountsError={accountsError}
           summaryError={summaryError}
-          onRetryAccounts={() => void loadAccounts(connection.token)}
-          onRegisterExpense={() => setScreen("nuevo")}
+           onRetryAccounts={() => void loadAccounts(connection.token)}
+           onRetrySummary={() => setSummaryRefreshVersion((current) => current + 1)}
+          onRegisterExpense={() => { setTransactionType("GASTO"); setCategoriaId(undefined); setSubcategoriaId(undefined); setScreen("nuevo"); }}
+          onRegisterIncome={() => { setTransactionType("INGRESO"); setScreen("nuevo"); }}
           onTransfer={() => {
             setTransferOriginId(accounts[0]?.id ?? "");
             setTransferDestinationId(accounts[1]?.id ?? "");
@@ -280,13 +366,13 @@ function App() {
           }}
           onManageAccounts={() => setIsAccountsOpen(true)}
           onPeriodChange={setSelectedPeriod}
-          periodo={selectedPeriod}
+          periodo={period}
           token={connection.token}
           pendingItems={pendingItems}
           onPendingChanged={() => {
             void listPendientes(connection.token).then(setPendingItems);
             void loadAccounts(connection.token);
-            void getResumenMensual(connection.token, selectedPeriod).then(setMonthlySummary);
+            void getResumenMensual(connection.token, period).then(setMonthlySummary);
           }}
         />
       ) : null}
@@ -321,6 +407,7 @@ function App() {
 
       {screen === "nuevo" ? (
         <form className="transaction-form" onSubmit={submitExpense}>
+           <div className="mode-toggle" aria-label="Tipo de movimiento"><button className={transactionType === "GASTO" ? "selected" : ""} type="button" onClick={() => setTransactionType("GASTO")}>Gasto</button><button className={transactionType === "INGRESO" ? "selected" : ""} type="button" onClick={() => setTransactionType("INGRESO")}>Ingreso</button></div>
            <MoneyInput value={amount} onChange={setAmount} autoFocus />
 
            <div className="date-section">
@@ -340,17 +427,18 @@ function App() {
              </button>
            </div>
 
-          <CategorySelector value={category} onChange={setCategory} />
+            <CategorySelector token={connection.token} tipo={transactionType} categoriaId={categoriaId} subcategoriaId={subcategoriaId} onCategoriaChange={setCategoriaId} onSubcategoriaChange={setSubcategoriaId} />
+            {transactionType === "INGRESO" ? <label className="form-field"><span>Disponible en</span><input type="month" value={incomePeriod} onChange={(event) => setIncomePeriod(event.target.value)} /></label> : null}
 
-          <label className="form-field">
+          {transactionType === "GASTO" ? <label className="form-field">
             <span>Nota <small>(opcional)</small></span>
             <input type="text" maxLength={60} value={note} onChange={(event) => setNote(event.target.value)} placeholder="¿En qué fue?" />
             <small className="character-count">{note.length}/60</small>
-          </label>
+          </label> : null}
 
-          <button className="primary-action" disabled={isSaving || accounts.length === 0} type="submit">
-            {isSaving ? "Registrando..." : "Registrar gasto"}
-          </button>
+           <button className="primary-action" disabled={isSaving || accounts.length === 0} type="submit">
+             {isSaving ? "Registrando..." : transactionType === "INGRESO" ? "Registrar ingreso" : "Registrar gasto"}
+           </button>
         </form>
       ) : null}
 
@@ -365,21 +453,16 @@ function App() {
 
       {screen === "movimientos" ? <Movimientos token={connection.token} accounts={accounts} onRegisterExpense={() => setScreen("nuevo")} /> : null}
 
-      {screen === "analisis" ? <Analisis token={connection.token} initialPeriod={selectedPeriod} /> : null}
+      {screen === "analisis" ? <Analisis token={connection.token} initialPeriod={period} /> : null}
 
-      {screen === "metas" ? (
-        <section className="empty-page">
-          <h2>Metas</h2>
-          <p>Esta pantalla necesita endpoints de lectura. Preferimos mostrar un estado honesto antes que datos ficticios.</p>
-        </section>
-      ) : null}
+      {screen === "categorias" ? <Categorias token={connection.token} /> : null}
 
       <nav className="bottom-nav" aria-label="Navegación principal">
         <button className={screen === "inicio" ? "active" : ""} type="button" onClick={() => setScreen("inicio")}>Inicio</button>
         <button className={screen === "movimientos" ? "active" : ""} type="button" onClick={() => setScreen("movimientos")}>Movimientos</button>
         <button className="add-button" type="button" onClick={() => setScreen("nuevo")}>+</button>
         <button className={screen === "analisis" ? "active" : ""} type="button" onClick={() => setScreen("analisis")}>Análisis</button>
-        <button className={screen === "metas" ? "active" : ""} type="button" onClick={() => setScreen("metas")}>Metas</button>
+        <button className={screen === "categorias" ? "active" : ""} type="button" onClick={() => setScreen("categorias")}>Categorías</button>
       </nav>
 
       {isConfigOpen ? (
@@ -394,6 +477,7 @@ function App() {
               <span>Token de API</span>
               <input required type="password" value={draftConnection.token} onChange={(event) => setDraftConnection({ ...draftConnection, token: event.target.value })} />
             </label>
+            <label className="remember-connection"><input type="checkbox" checked={rememberConnection} onChange={(event) => setRememberConnection(event.target.checked)} /><span>Recordar conexión en este dispositivo</span></label>
             {!accounts.length ? <>
               <label className="form-field">
                 <span>Nombre de la cuenta</span>
@@ -418,7 +502,7 @@ function App() {
               </label>
             </> : null}
             <div className="modal-actions">
-              {accounts.length ? <button type="button" onClick={() => setIsConfigOpen(false)}>Cancelar</button> : null}
+              {!accounts.length ? <button type="button" disabled={isConnecting || !draftConnection.token.trim()} onClick={() => void connectWithToken()}>{isConnecting ? "Conectando..." : "Conectar"}</button> : <button type="button" onClick={() => setIsConfigOpen(false)}>Cancelar</button>}
               <button className="primary-action" disabled={isCreatingAccount} type="submit">{isCreatingAccount ? "Guardando..." : accounts.length ? "Guardar conexión" : "Crear cuenta"}</button>
             </div>
           </form>

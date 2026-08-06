@@ -1,21 +1,40 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { listTransacciones } from "../../api/client";
-import type { CuentaResponseDTO, PaginatedResponseDTO, TransaccionResponseDTO } from "../../api/types";
+import { listTransacciones, listCategorias } from "../../api/client";
+import type { CuentaResponseDTO, CategoriaResponseDTO, PaginatedResponseDTO, TransaccionResponseDTO } from "../../api/types";
 import { Movimientos } from "./Movimientos";
 
 vi.mock("../../api/client", () => ({
   listTransacciones: vi.fn(),
+  listCategorias: vi.fn(),
 }));
 
 const listTransaccionesMock = vi.mocked(listTransacciones);
+const listCategoriasMock = vi.mocked(listCategorias);
 const account: CuentaResponseDTO = {
   id: "account-1",
   nombre: "Cuenta principal",
   saldoActual: 10000,
   tipo: "EFECTIVO",
   saldoInicial: 10000,
+};
+
+const categoriaComida: CategoriaResponseDTO = {
+  id: "cat-comida",
+  nombre: "Comida",
+  icono: "SUPER",
+  color: "ROJO",
+  tipo: "GASTO",
+  activa: true,
+  createdAt: "2026-01-01T00:00:00.000Z",
+  updatedAt: "2026-01-01T00:00:00.000Z",
+};
+const categoriaTransporte: CategoriaResponseDTO = {
+  ...categoriaComida,
+  id: "cat-transporte",
+  nombre: "Transporte",
+  icono: "CARRO",
 };
 
 function pageResult(page: number, hasNextPage = false): PaginatedResponseDTO<TransaccionResponseDTO> {
@@ -25,7 +44,7 @@ function pageResult(page: number, hasNextPage = false): PaginatedResponseDTO<Tra
       monto: -1200,
       moneda: "ARS",
       origen: "MANUAL",
-      categoria: "COMIDA",
+      categoria: categoriaComida,
       fecha: "2026-08-03T00:00:00.000Z",
       estado: "CONFIRMADA",
       esTransferenciaAPersona: false,
@@ -35,7 +54,7 @@ function pageResult(page: number, hasNextPage = false): PaginatedResponseDTO<Tra
       monto: -800,
       moneda: "ARS",
       origen: "OCR_IA",
-      categoria: "TRANSPORTE",
+      categoria: categoriaTransporte,
       fecha: "2026-08-02T00:00:00.000Z",
       estado: "CONFIRMADA",
       esTransferenciaAPersona: false,
@@ -51,6 +70,7 @@ function pageResult(page: number, hasNextPage = false): PaginatedResponseDTO<Tra
 beforeEach(() => {
   listTransaccionesMock.mockReset();
   listTransaccionesMock.mockResolvedValue(pageResult(1, true));
+  listCategoriasMock.mockResolvedValue([categoriaComida, categoriaTransporte]);
 });
 
 describe("Movimientos", () => {
@@ -75,8 +95,8 @@ describe("Movimientos", () => {
     expect(listTransaccionesMock).toHaveBeenLastCalledWith("token-123", expect.objectContaining({ page: 2 }));
 
     await user.click(screen.getByRole("button", { name: "Filtrar" }));
-    await user.selectOptions(screen.getByLabelText("Categoría"), "COMIDA");
-    await waitFor(() => expect(listTransaccionesMock).toHaveBeenLastCalledWith("token-123", expect.objectContaining({ page: 1, categoria: "COMIDA" })));
+    await user.selectOptions(screen.getByLabelText("Categoría"), "cat-comida");
+    await waitFor(() => expect(listTransaccionesMock).toHaveBeenLastCalledWith("token-123", expect.objectContaining({ page: 1, categoriaId: "cat-comida" })));
   });
 
   it("offers an expense action for an empty result", async () => {

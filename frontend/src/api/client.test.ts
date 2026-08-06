@@ -42,7 +42,7 @@ describe("API client", () => {
     const input = {
       monto: "1200",
       cuentaId: "account-1",
-      categoria: "COMIDA" as const,
+      categoriaId: "cat-comida",
       origen: "MANUAL" as const,
       idempotencyKey: "request-1",
       fecha: "2026-08-03",

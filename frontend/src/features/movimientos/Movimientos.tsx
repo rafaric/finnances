@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import { listTransacciones } from "../../api/client";
+import { listTransacciones, listCategorias } from "../../api/client";
 import type {
-  Categoria,
   CuentaResponseDTO,
   EstadoTransaccion,
   PaginatedResponseDTO,
   TransaccionResponseDTO,
+  CategoriaResponseDTO,
   TipoMovimiento,
 } from "../../api/types";
 import { ErrorState } from "../../components/ErrorState";
@@ -17,16 +17,6 @@ interface MovimientosProps {
   accounts: CuentaResponseDTO[];
   onRegisterExpense: () => void;
 }
-
-const CATEGORIES: Array<{ value: Categoria; label: string }> = [
-  { value: "COMIDA", label: "Comida" },
-  { value: "TRANSPORTE", label: "Transporte" },
-  { value: "VIVIENDA", label: "Vivienda" },
-  { value: "SERVICIOS", label: "Servicios" },
-  { value: "OCIO", label: "Ocio" },
-  { value: "DEUDAS", label: "Deudas" },
-  { value: "OTROS", label: "Otros" },
-];
 
 const STATES: Array<{ value: EstadoTransaccion; label: string }> = [
   { value: "CONFIRMADA", label: "Confirmadas" },
@@ -64,7 +54,8 @@ function originLabel(origin: TransaccionResponseDTO["origen"]): string {
 export function Movimientos({ token, accounts, onRegisterExpense }: MovimientosProps) {
   const [periodo, setPeriodo] = useState(() => new Date().toISOString().slice(0, 7));
   const [cuentaId, setCuentaId] = useState("");
-  const [categoria, setCategoria] = useState<Categoria | "">("");
+  const [categoriaId, setCategoriaId] = useState<string | "">("");
+  const [categorias, setCategorias] = useState<CategoriaResponseDTO[]>([]);
   const [estado, setEstado] = useState<EstadoTransaccion | "">("");
   const [tipo, setTipo] = useState<TipoMovimiento | "">("");
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
@@ -75,17 +66,21 @@ export function Movimientos({ token, accounts, onRegisterExpense }: MovimientosP
   const [reloadVersion, setReloadVersion] = useState(0);
 
   useEffect(() => {
+    void listCategorias(token, { tipo: "GASTO", activa: true }).then(setCategorias).catch(() => setCategorias([]));
+  }, [token]);
+
+  useEffect(() => {
     let active = true;
     setIsLoading(true);
     setError(undefined);
     void listTransacciones(token, {
       periodo,
       cuentaId: cuentaId || undefined,
-      categoria: categoria || undefined,
+      categoriaId: categoriaId || undefined,
       estado: estado || undefined,
       tipo: tipo || undefined,
-       page,
-       limit: PAGE_SIZE,
+      page,
+      limit: PAGE_SIZE,
     })
       .then((nextResult) => {
         if (active) setResult(nextResult);
@@ -100,7 +95,7 @@ export function Movimientos({ token, accounts, onRegisterExpense }: MovimientosP
     return () => {
       active = false;
     };
-  }, [categoria, cuentaId, estado, page, periodo, reloadVersion, tipo, token]);
+  }, [categoriaId, cuentaId, estado, page, periodo, reloadVersion, tipo, token]);
 
   const totalPages = result ? Math.max(1, Math.ceil(result.total / result.limit)) : 1;
 
@@ -109,7 +104,6 @@ export function Movimientos({ token, accounts, onRegisterExpense }: MovimientosP
       <div className="movement-toolbar">
         <PeriodPills value={periodo} onChange={(nextPeriod) => { setPeriodo(nextPeriod); setPage(1); }} includeAll />
         <div className="movement-actions">
-          
           <button className={isFiltersOpen ? "filter-button active" : "filter-button"} type="button" aria-expanded={isFiltersOpen} onClick={() => setIsFiltersOpen((current) => !current)}>Filtrar</button>
         </div>
       </div>
@@ -128,9 +122,9 @@ export function Movimientos({ token, accounts, onRegisterExpense }: MovimientosP
         </label>
         <label className="form-field">
           <span>Categoría</span>
-          <select value={categoria} onChange={(event) => { setCategoria(event.target.value as Categoria | ""); setPage(1); }}>
+          <select value={categoriaId} onChange={(event) => { setCategoriaId(event.target.value); setPage(1); }}>
             <option value="">Todas</option>
-            {CATEGORIES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+            {categorias.map((cat) => <option key={cat.id} value={cat.id}>{cat.nombre}</option>)}
           </select>
         </label>
         <label className="form-field">
@@ -147,7 +141,7 @@ export function Movimientos({ token, accounts, onRegisterExpense }: MovimientosP
       {!isLoading && !error && result?.items.length === 0 ? (
         <div className="empty-page">
           <h2>No hay movimientos</h2>
-           <p>No hay movimientos con estos filtros.</p>
+          <p>No hay movimientos con estos filtros.</p>
           <button className="primary-action" type="button" onClick={onRegisterExpense}>Registrar gasto</button>
         </div>
       ) : null}
@@ -157,7 +151,7 @@ export function Movimientos({ token, accounts, onRegisterExpense }: MovimientosP
              {result.items.map((transaction) => (
                <article className="movement-row" key={transaction.id}>
                  <div className="movement-main">
-                   <strong>{CATEGORIES.find((item) => item.value === transaction.categoria)?.label ?? transaction.categoria}</strong>
+                   <strong>{transaction.categoria?.nombre ?? "Sin categoría"}</strong>
                     <span>{transaction.comercio ?? transaction.cuenta?.nombre ?? "Cuenta sin resolver"} · {formatDate(transaction.fecha)}</span>
                  </div>
                  <div className="movement-amount">

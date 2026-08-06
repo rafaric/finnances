@@ -14,7 +14,9 @@ interface HomeProps {
   accountsError?: string;
   summaryError?: string;
   onRetryAccounts: () => void;
+  onRetrySummary: () => void;
   onRegisterExpense: () => void;
+  onRegisterIncome: () => void;
   onTransfer: () => void;
   onManageAccounts: () => void;
   onPeriodChange: (periodo: string) => void;
@@ -40,7 +42,9 @@ export function Home({
   accountsError,
   summaryError,
   onRetryAccounts,
+  onRetrySummary,
   onRegisterExpense,
+  onRegisterIncome,
   onTransfer,
   onManageAccounts,
   onPeriodChange,
@@ -57,34 +61,35 @@ export function Home({
 
       <section className="balance-panel">
         <p>Disponible líquido</p>
-        <strong>{isLoadingSummary ? "Cargando..." : summary ? currency(summary.disponibleLiquido) : "Sin datos aún"}</strong>
+        <strong>{isLoadingSummary ? "Cargando..." : summaryError ? "No disponible" : summary ? currency(summary.disponibleLiquido) : "Sin datos aún"}</strong>
         <span>{accounts.length ? `${accounts.length} cuenta${accounts.length === 1 ? "" : "s"} conectada${accounts.length === 1 ? "" : "s"}.` : "Creá una cuenta para empezar."}</span>
       </section>
 
       <div className="period-grid">
         <article>
           <span>Ingresos del período</span>
-          <strong>{isLoadingSummary ? "Cargando..." : summary ? currency(summary.ingresos) : "Sin datos"}</strong>
-          <p>{summaryError ?? "Resumen mensual"}</p>
+          <strong>{isLoadingSummary ? "Cargando..." : summaryError ? "No disponible" : summary ? currency(summary.ingresos) : "Sin datos"}</strong>
+          <p>Resumen mensual</p>
         </article>
         <article>
           <span>Gastos del período</span>
-          <strong>{isLoadingSummary ? "Cargando..." : summary ? currency(summary.gastos) : "Sin datos"}</strong>
-          <p>{summaryError ?? "Solo transacciones confirmadas"}</p>
+          <strong>{isLoadingSummary ? "Cargando..." : summaryError ? "No disponible" : summary ? currency(summary.gastos) : "Sin datos"}</strong>
+          <p>Solo transacciones confirmadas</p>
         </article>
       </div>
+      {summaryError ? <ErrorState message={summaryError} onRetry={onRetrySummary} /> : null}
 
       {pendingItems.length ? <PendingWidget token={token} accounts={accounts} items={pendingItems} onChanged={onPendingChanged} /> : null}
 
       <section className="section-heading">
         <div>
           <h2>Acciones rápidas</h2>
-          <p>Capturá lo importante sin perder contexto.</p>
         </div>
       </section>
 
       <div className="actions-grid">
         <button type="button" onClick={onRegisterExpense}>Registrar gasto</button>
+        <button type="button" onClick={onRegisterIncome}>Registrar ingreso</button>
       </div>
 
       <section className={isAccountsExpanded ? "accounts-widget expanded" : "accounts-widget"}>

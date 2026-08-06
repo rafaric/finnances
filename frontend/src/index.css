@@ -257,7 +257,7 @@ h2 {
 }
 .actions-grid {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 .actions-grid button {
@@ -452,6 +452,8 @@ fieldset legend,
 .form-field small {
   font-weight: 500;
 }
+.remember-connection { display: flex; align-items: center; gap: 9px; color: #60766b; font-size: 0.82rem; }
+.remember-connection input { width: 17px; height: 17px; accent-color: #173f30; }
 .date-section {
   display: flex;
   align-items: center;
@@ -544,6 +546,58 @@ fieldset {
   font-weight: 700;
 }
 .category-grid .selected {
+  border-color: #173f30;
+  background: #e1eee6;
+  color: #173f30;
+}
+.subcategory-section {
+  margin-top: 14px;
+}
+.subcategory-legend {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #60766b;
+  margin-bottom: 8px;
+}
+.subcategory-legend .optional-hint {
+  font-weight: 400;
+  font-size: 0.7rem;
+  color: #8aa89d;
+}
+.subcategory-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.subcategory-pills button {
+  padding: 4px 12px;
+  min-height: 32px;
+  border: 1px solid #cbd9d1;
+  border-radius: 16px;
+  background: #fbfdfb;
+  color: #385347;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.category-icon::before {
+  font-size: 1.25rem;
+  display: inline-block;
+  line-height: 1;
+}
+.icon-utensilios_cocina::before { content: "🍽️"; }
+.icon-carro::before { content: "🚌"; }
+.icon-casa::before { content: "🏠"; }
+.icon-llave::before { content: "🔑"; }
+.icon-telefono::before { content: "📞"; }
+.icon-corazon::before { content: "💘"; }
+.icon-oculos::before { content: "🕶️"; }
+.icon-super::before { content: "🛒"; }
+.icon-gimnasio::before { content: "💪"; }
+.icon-libros::before { content: "📚"; }
+.icon-avion::before { content: "✈️"; }
+.icon-otro::before { content: "📦"; }
+.subcategory-pills button.selected {
   border-color: #173f30;
   background: #e1eee6;
   color: #173f30;
@@ -1174,6 +1228,19 @@ fieldset {
     border-color: #6eaa89;
   }
   .category-grid .selected {
+    border-color: #9ad3ad;
+    background: #294f3b;
+    color: #e5f5e9;
+  }
+  .subcategory-legend {
+    color: #8aa89d;
+  }
+  .subcategory-pills button {
+    border-color: #416754;
+    background: #172e24;
+    color: #b5d2c0;
+  }
+  .subcategory-pills button.selected {
     border-color: #9ad3ad;
     background: #294f3b;
     color: #e5f5e9;

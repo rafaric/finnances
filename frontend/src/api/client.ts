@@ -11,6 +11,11 @@ import type {
   CorregirOcrInput,
   TransferenciaResponseDTO,
   TransaccionResponseDTO,
+  CrearIngresoInput,
+  IngresoResponseDTO,
+  CategoriaResponseDTO,
+  SubcategoriaResponseDTO,
+  TipoCategoria,
 } from "./types";
 
 export class ApiRequestError extends Error {
@@ -88,6 +93,13 @@ export function crearGasto(
   });
 }
 
+export function crearIngreso(token: string, input: CrearIngresoInput): Promise<IngresoResponseDTO> {
+  return request<IngresoResponseDTO>(token, "/api/v1/ingresos", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
 export function crearTransferencia(
   token: string,
   input: CrearTransferenciaInput,
@@ -132,4 +144,58 @@ export function getResumenMensual(
     token,
     `/api/v1/resumen-mensual?periodo=${encodeURIComponent(periodo)}`,
   );
+}
+
+export function listCategorias(
+  token: string,
+  params?: { tipo?: TipoCategoria; activa?: boolean },
+): Promise<CategoriaResponseDTO[]> {
+  const search = new URLSearchParams();
+  if (params?.tipo) search.set("tipo", params.tipo);
+  if (params?.activa !== undefined) search.set("activa", String(params.activa));
+  const query = search.toString();
+  return request<CategoriaResponseDTO[]>(
+    token,
+    `/api/v1/categorias${query ? `?${query}` : ""}`,
+  );
+}
+
+export function listSubcategorias(
+  token: string,
+  categoriaId?: string,
+): Promise<SubcategoriaResponseDTO[]> {
+  const query = categoriaId ? `?categoriaId=${encodeURIComponent(categoriaId)}` : "";
+  return request<SubcategoriaResponseDTO[]>(
+    token,
+    `/api/v1/subcategorias${query}`,
+  );
+}
+
+export interface CrearCategoriaInput {
+  nombre: string;
+  icono: string;
+  color: string;
+  tipo: TipoCategoria;
+  activa?: boolean;
+}
+
+export function crearCategoria(
+  token: string,
+  input: CrearCategoriaInput,
+): Promise<CategoriaResponseDTO> {
+  return request<CategoriaResponseDTO>(token, "/api/v1/categorias", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function actualizarCategoria(
+  token: string,
+  id: string,
+  input: Partial<CrearCategoriaInput>,
+): Promise<CategoriaResponseDTO> {
+  return request<CategoriaResponseDTO>(token, `/api/v1/categorias/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
 }
