@@ -31,6 +31,19 @@ function date(value: string): string {
   return new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "short" }).format(new Date(value));
 }
 
+function daysUntilDue(day: number): string {
+  const today = new Date();
+  const lastDayThisMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+  const dueThisMonth = new Date(today.getFullYear(), today.getMonth(), Math.min(day, lastDayThisMonth));
+  const due = dueThisMonth >= new Date(today.getFullYear(), today.getMonth(), today.getDate())
+    ? dueThisMonth
+    : new Date(today.getFullYear(), today.getMonth() + 1, Math.min(day, new Date(today.getFullYear(), today.getMonth() + 2, 0).getDate()));
+  const days = Math.ceil((due.getTime() - new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime()) / 86_400_000);
+  if (days === 0) return "Vence hoy";
+  if (days === 1) return "Falta 1 día";
+  return `Faltan ${days} días`;
+}
+
 export function Recurrentes({ token, accounts }: RecurrentesProps) {
   const [items, setItems] = useState<GastoRecurrenteResponseDTO[]>([]);
   const [instances, setInstances] = useState<InstanciaRecurrenteResponseDTO[]>([]);
@@ -103,7 +116,7 @@ export function Recurrentes({ token, accounts }: RecurrentesProps) {
       </section>
     </div> : null}
     {isLoading ? <LoadingState label="Cargando recurrentes..." /> : error ? <ErrorState message={error} onRetry={() => void load()} /> : <>
-      <div className="recurrente-list">{items.length ? items.map((item) => <article className="recurrente-card" key={item.id}><div><strong>{item.nombre}</strong><span>{item.categoria.nombre}{item.subcategoria ? ` · ${item.subcategoria.nombre}` : ""} · Día {item.diaDelMes}</span></div><b>{currency(item.montoFijo)}</b><button type="button" onClick={() => void generate(item)}>Generar instancia</button></article>) : <p className="empty-page">No hay gastos recurrentes creados.</p>}</div>
+      <div className="recurrente-list">{items.length ? items.map((item) => <article className="recurrente-card" key={item.id}><div><strong>{item.nombre}</strong><span>{daysUntilDue(item.diaDelMes)}</span></div><b>{currency(item.montoFijo)}</b><button type="button" title="Crea el vencimiento para poder confirmarlo u omitirlo" onClick={() => void generate(item)}>Proyectar vencimiento</button></article>) : <p className="empty-page">No hay gastos recurrentes creados.</p>}</div>
       {instances.length ? <div className="recurrente-instances"><h3>Instancias proyectadas</h3>{instances.map((instance) => <article className="recurrente-card" key={instance.id}><div><strong>{instance.gastoRecurrente.nombre}</strong><span>{date(instance.fechaVencimiento)} · {instance.gastoRecurrente.cuenta.nombre}</span></div><b>{currency(instance.monto)}</b><button type="button" onClick={() => void resolve(instance, "confirmar")}>Confirmar</button><button type="button" onClick={() => void resolve(instance, "omitir")}>Omitir</button></article>)}</div> : null}
     </>}
   </section>;
