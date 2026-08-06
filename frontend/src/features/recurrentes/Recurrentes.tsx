@@ -86,6 +86,8 @@ export function Recurrentes({ token, accounts }: RecurrentesProps) {
     } catch (requestError) { setError(requestError instanceof Error ? requestError.message : "No se pudo resolver la instancia."); }
   }
 
+  const isCustomDay = ![1, 3, 5, 10, 15, 20, 25].includes(Number(day));
+
   return <section className="recurrentes-page">
     <div className="section-heading"><div><p className="eyebrow">COMPROMISOS</p><h2>Recurrentes</h2></div><button className="primary-action" type="button" onClick={() => setIsFormOpen(true)}>+ Nuevo</button></div>
     {isFormOpen ? <div className="modal-backdrop" role="presentation">
@@ -94,7 +96,7 @@ export function Recurrentes({ token, accounts }: RecurrentesProps) {
       <label className="form-field"><span>Nombre</span><input value={name} onChange={(event) => setName(event.target.value)} placeholder="Alquiler, gimnasio..." /></label>
       <MoneyInput value={amount} onChange={setAmount} />
       <AccountPicker accounts={accounts} value={accountId} onChange={setAccountId} disabled={!accounts.length} />
-      <div className="recurring-day-field"><span className="recurring-field-label">Día del mes</span><div className="recurring-day-pills">{[1, 3, 5, 10, 15, 20, 25].map((value) => <button className={Number(day) === value && !customDayOpen ? "selected" : ""} key={value} type="button" onClick={() => { setDay(String(value)); setCustomDayOpen(false); }}>{value}</button>)}<button className={customDayOpen ? "selected" : ""} type="button" onClick={() => setCustomDayOpen(true)}>Otro día</button></div>{customDayOpen ? <div className="recurring-all-days">{Array.from({ length: 31 }, (_, index) => index + 1).map((value) => <button className={Number(day) === value ? "selected" : ""} key={value} type="button" onClick={() => { setDay(String(value)); setCustomDayOpen(false); }}>{value}</button>)}</div> : null}</div>
+      <div className="recurring-day-field"><span className="recurring-field-label">Día del mes</span><div className="recurring-day-pills">{[1, 3, 5, 10, 15, 20, 25].map((value) => <button className={Number(day) === value && !customDayOpen ? "selected" : ""} key={value} type="button" onClick={() => { setDay(String(value)); setCustomDayOpen(false); }}>{value}</button>)}<button className={customDayOpen || isCustomDay ? "selected" : ""} type="button" onClick={() => setCustomDayOpen(true)}>Otro día{isCustomDay ? `: ${day}` : ""}</button></div>{customDayOpen ? <div className="recurring-all-days">{Array.from({ length: 31 }, (_, index) => index + 1).map((value) => <button className={Number(day) === value ? "selected" : ""} key={value} type="button" onClick={() => { setDay(String(value)); setCustomDayOpen(false); }}>{value}</button>)}</div> : null}</div>
       <CategorySelector token={token} tipo="GASTO" categoriaId={categoryId} subcategoriaId={subcategoryId} onCategoriaChange={setCategoryId} onSubcategoriaChange={setSubcategoryId} />
       <label className="form-field"><span>Nota <small>(opcional)</small></span><input maxLength={60} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="¿Qué gasto es?" /><small className="character-count">{notes.length}/60</small></label>
       <button className="primary-action" type="button" disabled={!name || !amount || !categoryId} onClick={() => void submit()}>Guardar recurrente</button>
