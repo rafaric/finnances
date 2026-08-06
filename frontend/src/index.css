@@ -637,6 +637,52 @@ fieldset {
   background: #e1eee6;
   color: #173f30;
 }
+.recurrente-form,
+.recurrente-card {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #d2dfd7;
+  border-radius: 16px;
+  background: #fbfdfb;
+}
+.recurrente-form {
+  margin-bottom: 16px;
+}
+.recurrente-list,
+.recurrente-instances {
+  display: grid;
+  gap: 10px;
+}
+.recurrente-instances {
+  margin-top: 24px;
+}
+.recurrente-instances h3 {
+  margin: 0;
+  color: #385347;
+  font-size: 0.95rem;
+}
+.recurrente-card {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+.recurrente-card > div {
+  display: grid;
+  gap: 4px;
+}
+.recurrente-card span {
+  color: #60766b;
+  font-size: 0.82rem;
+}
+.recurrente-card button {
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 1px solid #cbd9d1;
+  border-radius: 10px;
+  background: transparent;
+  color: #385347;
+  font-weight: 700;
+}
 .account-note {
   padding: 15px;
   border: 1px solid #d2dfd7;

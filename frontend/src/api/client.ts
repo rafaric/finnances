@@ -16,6 +16,9 @@ import type {
   CategoriaResponseDTO,
   SubcategoriaResponseDTO,
   TipoCategoria,
+  CrearRecurrenteInput,
+  GastoRecurrenteResponseDTO,
+  InstanciaRecurrenteResponseDTO,
 } from "./types";
 
 export class ApiRequestError extends Error {
@@ -198,4 +201,34 @@ export function actualizarCategoria(
     method: "PATCH",
     body: JSON.stringify(input),
   });
+}
+
+export function listarRecurrentes(token: string): Promise<GastoRecurrenteResponseDTO[]> {
+  return request<GastoRecurrenteResponseDTO[]>(token, "/api/v1/recurrentes");
+}
+
+export function crearRecurrente(token: string, input: CrearRecurrenteInput): Promise<GastoRecurrenteResponseDTO> {
+  return request<GastoRecurrenteResponseDTO>(token, "/api/v1/recurrentes", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function listarInstanciasRecurrentes(token: string): Promise<InstanciaRecurrenteResponseDTO[]> {
+  return request<InstanciaRecurrenteResponseDTO[]>(token, "/api/v1/recurrentes/instancias");
+}
+
+export function generarInstanciaRecurrente(token: string, recurrenteId: string): Promise<InstanciaRecurrenteResponseDTO> {
+  return request<InstanciaRecurrenteResponseDTO>(token, `/api/v1/recurrentes/${encodeURIComponent(recurrenteId)}/instancia`, { method: "POST" });
+}
+
+export function confirmarInstanciaRecurrente(token: string, instanciaId: string, cuentaRealId?: string): Promise<InstanciaRecurrenteResponseDTO> {
+  return request<InstanciaRecurrenteResponseDTO>(token, `/api/v1/recurrentes/instancias/${encodeURIComponent(instanciaId)}/confirmar`, {
+    method: "POST",
+    body: JSON.stringify({ cuentaRealId }),
+  });
+}
+
+export function omitirInstanciaRecurrente(token: string, instanciaId: string): Promise<InstanciaRecurrenteResponseDTO> {
+  return request<InstanciaRecurrenteResponseDTO>(token, `/api/v1/recurrentes/instancias/${encodeURIComponent(instanciaId)}/omitir`, { method: "POST" });
 }

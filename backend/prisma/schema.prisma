@@ -172,6 +172,8 @@ model GastoRecurrente {
   cuenta             Cuenta                     @relation(fields: [cuentaId], references: [id])
   subcategoria       Subcategoria?              @relation(fields: [subcategoriaId], references: [id])
   instancias         InstanciaGastoRecurrente[]
+
+  @@index([activo, cuentaId])
 }
 
 model InstanciaGastoRecurrente {
@@ -185,6 +187,9 @@ model InstanciaGastoRecurrente {
   transaccionId     String?                   @unique
   gastoRecurrente   GastoRecurrente           @relation(fields: [gastoRecurrenteId], references: [id])
   transaccion       Transaccion?              @relation("TransaccionInstanciaRecurrente", fields: [transaccionId], references: [id])
+
+  @@unique([gastoRecurrenteId, fechaVencimiento])
+  @@index([estado, fechaVencimiento])
 }
 
 model TransferenciaInterna {

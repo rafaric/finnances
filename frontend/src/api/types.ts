@@ -86,6 +86,40 @@ export interface CrearIngresoInput {
   idempotencyKey: string;
 }
 
+export type FrecuenciaRecurrente = "MENSUAL";
+export type EstadoInstanciaRecurrente = "PROYECTADO" | "CONFIRMADO" | "OMITIDO";
+
+export interface GastoRecurrenteResponseDTO {
+  id: string;
+  nombre: string;
+  montoFijo: number;
+  cuenta: CuentaResumenDTO;
+  categoria: CategoriaResponseDTO;
+  subcategoria?: SubcategoriaResponseDTO;
+  frecuencia: FrecuenciaRecurrente;
+  diaDelMes: number;
+  activo: boolean;
+}
+
+export interface InstanciaRecurrenteResponseDTO {
+  id: string;
+  fechaVencimiento: string;
+  monto: number;
+  estado: EstadoInstanciaRecurrente;
+  gastoRecurrente: GastoRecurrenteResponseDTO;
+  cuentaRealId?: string;
+}
+
+export interface CrearRecurrenteInput {
+  nombre: string;
+  montoFijo: string;
+  cuentaId: string;
+  categoriaId: string;
+  subcategoriaId?: string;
+  diaDelMes: number;
+  notas?: string;
+}
+
 export type OrigenTransaccion =
   | "APPLE_PAY"
   | "OCR_IA"

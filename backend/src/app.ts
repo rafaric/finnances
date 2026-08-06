@@ -22,6 +22,14 @@ import { calcularSaldo } from "./services/saldo";
 import { calcularResumenMensual } from "./services/resumenMensual";
 import { crearIngreso } from "./services/ingreso";
 import { toIngresoDTO } from "./dto/ingreso";
+import {
+  confirmarInstanciaRecurrente,
+  crearRecurrente,
+  generarInstanciaRecurrente,
+  listarInstanciasRecurrentes,
+  listarRecurrentes,
+  omitirInstanciaRecurrente,
+} from "./services/recurrente";
 
 function normalizeEntity(value: string): string {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
@@ -605,6 +613,64 @@ export function buildApp(prisma: PrismaClient) {
 
       await prisma.subcategoria.delete({ where: { id: params.id } });
       return reply.code(204).send();
+    } catch (error) {
+      if (error instanceof ZodError) return fromZodError(reply, error);
+      if (error instanceof Error) return fromDomainError(reply, error);
+      return internalError(reply);
+    }
+  });
+
+  const RecurrenteSchema = z.object({
+    nombre: z.string().min(1).max(80),
+    montoFijo: z.string().or(z.number()),
+    cuentaId: z.string(),
+    categoriaId: z.string(),
+    subcategoriaId: z.string().optional(),
+    diaDelMes: z.number().int().min(1).max(31),
+    notas: z.string().max(60).optional(),
+  });
+
+  app.post("/api/v1/recurrentes", async (request, reply) => {
+    try {
+      return reply.code(201).send(await crearRecurrente(prisma, RecurrenteSchema.parse(request.body)));
+    } catch (error) {
+      if (error instanceof ZodError) return fromZodError(reply, error);
+      if (error instanceof Error) return fromDomainError(reply, error);
+      return internalError(reply);
+    }
+  });
+
+  app.get("/api/v1/recurrentes", async (_request, reply) => reply.send(await listarRecurrentes(prisma)));
+
+  app.get("/api/v1/recurrentes/instancias", async (_request, reply) => reply.send(await listarInstanciasRecurrentes(prisma)));
+
+  app.post("/api/v1/recurrentes/:id/instancia", async (request, reply) => {
+    try {
+      const { id } = z.object({ id: z.string() }).parse(request.params);
+      return reply.code(201).send(await generarInstanciaRecurrente(prisma, id));
+    } catch (error) {
+      if (error instanceof ZodError) return fromZodError(reply, error);
+      if (error instanceof Error) return fromDomainError(reply, error);
+      return internalError(reply);
+    }
+  });
+
+  app.post("/api/v1/recurrentes/instancias/:id/confirmar", async (request, reply) => {
+    try {
+      const { id } = z.object({ id: z.string() }).parse(request.params);
+      const body = z.object({ cuentaRealId: z.string().optional() }).parse(request.body ?? {});
+      return reply.send(await confirmarInstanciaRecurrente(prisma, id, body.cuentaRealId));
+    } catch (error) {
+      if (error instanceof ZodError) return fromZodError(reply, error);
+      if (error instanceof Error) return fromDomainError(reply, error);
+      return internalError(reply);
+    }
+  });
+
+  app.post("/api/v1/recurrentes/instancias/:id/omitir", async (request, reply) => {
+    try {
+      const { id } = z.object({ id: z.string() }).parse(request.params);
+      return reply.send(await omitirInstanciaRecurrente(prisma, id));
     } catch (error) {
       if (error instanceof ZodError) return fromZodError(reply, error);
       if (error instanceof Error) return fromDomainError(reply, error);

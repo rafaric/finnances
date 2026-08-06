@@ -17,6 +17,7 @@ interface HomeProps {
   onRetrySummary: () => void;
   onRegisterExpense: () => void;
   onRegisterIncome: () => void;
+  onRecurrentes: () => void;
   onTransfer: () => void;
   onManageAccounts: () => void;
   onPeriodChange: (periodo: string) => void;
@@ -45,6 +46,7 @@ export function Home({
   onRetrySummary,
   onRegisterExpense,
   onRegisterIncome,
+  onRecurrentes,
   onTransfer,
   onManageAccounts,
   onPeriodChange,
@@ -90,6 +92,7 @@ export function Home({
       <div className="actions-grid">
         <button type="button" onClick={onRegisterExpense}>Registrar gasto</button>
         <button type="button" onClick={onRegisterIncome}>Registrar ingreso</button>
+        <button type="button" onClick={onRecurrentes}>Gastos recurrentes</button>
       </div>
 
       <section className={isAccountsExpanded ? "accounts-widget expanded" : "accounts-widget"}>

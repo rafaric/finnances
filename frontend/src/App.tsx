@@ -7,10 +7,11 @@ import { Home } from "./features/home/Home";
 import { Movimientos } from "./features/movimientos/Movimientos";
 import { Analisis } from "./features/analisis/Analisis";
 import { Categorias } from "./features/categorias/Categorias";
+import { Recurrentes } from "./features/recurrentes/Recurrentes";
 import { currentPeriod } from "./lib/periods";
 import { Bolt, X } from "lucide-react";
 import "./index.css";
-type Screen = "inicio" | "movimientos" | "nuevo" | "transferir" | "analisis" | "categorias";
+type Screen = "inicio" | "movimientos" | "nuevo" | "transferir" | "analisis" | "categorias" | "recurrentes";
 
 interface Connection {
   token: string;
@@ -341,7 +342,7 @@ function App() {
   return (
     <main className="app-shell">
       <header className={screen === "inicio" ? "topbar home-topbar" : "topbar compact-topbar"}>
-        {screen === "inicio" ? <div><p className="eyebrow">FINNANCES</p><h1>Tu plata, en contexto.</h1></div> : <h1>{screen === "nuevo" ? "Nueva transacción" : screen === "transferir" ? "Transferir" : screen === "movimientos" ? "Movimientos" : screen === "analisis" ? "Análisis" : "Metas"}</h1>}
+         {screen === "inicio" ? <div><p className="eyebrow">FINNANCES</p><h1>Tu plata, en contexto.</h1></div> : <h1>{screen === "nuevo" ? "Nueva transacción" : screen === "transferir" ? "Transferir" : screen === "movimientos" ? "Movimientos" : screen === "analisis" ? "Análisis" : screen === "recurrentes" ? "Gastos recurrentes" : "Categorías"}</h1>}
         <button className="settings-button icon-button" type="button" aria-label="Configuración de conexión" title="Configuración de conexión" onClick={() => setIsConfigOpen(true)}><Bolt size={19} strokeWidth={2.2} /></button>
       </header>
 
@@ -358,7 +359,8 @@ function App() {
            onRetryAccounts={() => void loadAccounts(connection.token)}
            onRetrySummary={() => setSummaryRefreshVersion((current) => current + 1)}
           onRegisterExpense={() => { setTransactionType("GASTO"); setCategoriaId(undefined); setSubcategoriaId(undefined); setScreen("nuevo"); }}
-          onRegisterIncome={() => { setTransactionType("INGRESO"); setScreen("nuevo"); }}
+           onRegisterIncome={() => { setTransactionType("INGRESO"); setScreen("nuevo"); }}
+           onRecurrentes={() => setScreen("recurrentes")}
           onTransfer={() => {
             setTransferOriginId(accounts[0]?.id ?? "");
             setTransferDestinationId(accounts[1]?.id ?? "");
@@ -456,6 +458,7 @@ function App() {
       {screen === "analisis" ? <Analisis token={connection.token} initialPeriod={period} /> : null}
 
       {screen === "categorias" ? <Categorias token={connection.token} /> : null}
+      {screen === "recurrentes" ? <Recurrentes token={connection.token} accounts={accounts} /> : null}
 
       <nav className="bottom-nav" aria-label="Navegación principal">
         <button className={screen === "inicio" ? "active" : ""} type="button" onClick={() => setScreen("inicio")}>Inicio</button>
