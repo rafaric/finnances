@@ -12,15 +12,12 @@ function currency(value: number): string {
 }
 
 export function AccountPicker({ accounts, value, onChange, disabled }: AccountPickerProps) {
-  const account = accounts.find((item) => item.id === value);
-
   return (
     <label className="form-field account-picker-field">
       <span>Cuenta</span>
       <select disabled={disabled} value={value} onChange={(event) => onChange(event.target.value)}>
         {accounts.map((item) => <option key={item.id} value={item.id}>{item.nombre} · {currency(item.saldoActual)}</option>)}
       </select>
-      <small>{account ? `Saldo: ${currency(account.saldoActual)}` : "No hay cuentas configuradas"}</small>
     </label>
   );
 }
