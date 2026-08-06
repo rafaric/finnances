@@ -67,7 +67,7 @@ async function run() {
     }
 
     const corrected = await corregirTransaccionOCR(prisma, pending.id, {
-      categoria: "COMIDA",
+      categoriaId: "cat-comida",
       comercio: "Supermercado",
     });
 

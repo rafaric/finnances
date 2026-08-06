@@ -37,7 +37,7 @@ async function run() {
     const input = {
       monto: "100",
       cuentaId: cuenta.id,
-      categoria: "OTROS",
+      categoriaId: "cat-otros",
       origen: "MANUAL",
       idempotencyKey: key,
     } as any;
@@ -71,7 +71,7 @@ async function run() {
     await crearTransaccion(prisma, {
       monto: "50",
       cuentaId: cuenta.id,
-      categoria: "OTROS",
+      categoriaId: "cat-otros",
       origen: "MANUAL",
       idempotencyKey: pendienteKey,
       estado: "PENDIENTE_REVISION",
@@ -92,18 +92,18 @@ async function run() {
     if (ocrTx.estado === "CONFIRMADA") {
       // si el OCR infirió todo, el saldo ya bajó — verificamos que no baje de nuevo al corregir
       const saldoAntesCor = await calcularSaldo(prisma, cuenta.id);
-      await corregirTransaccionOCR(prisma, ocrTx.id, { categoria: "COMIDA", monto: "75" }).catch(() => {});
+      await corregirTransaccionOCR(prisma, ocrTx.id, { categoriaId: "cat-comida", monto: "75" }).catch(() => {});
       const saldoDesp = await calcularSaldo(prisma, cuenta.id);
       if (saldoDesp !== saldoAntesCor) throw new Error("Confirmed OCR re-correction should not change saldo");
     } else {
       const saldoAntesCor = await calcularSaldo(prisma, cuenta.id);
-      await corregirTransaccionOCR(prisma, ocrTx.id, { categoria: "COMIDA", monto: "75" });
+      await corregirTransaccionOCR(prisma, ocrTx.id, { categoriaId: "cat-comida", monto: "75" });
       const saldoDesp = await calcularSaldo(prisma, cuenta.id);
       if (saldoAntesCor - saldoDesp !== 75) {
         throw new Error(`OCR correction should reduce saldo by 75, got delta ${saldoAntesCor - saldoDesp}`);
       }
       // segunda corrección debe fallar — no duplica
-      await corregirTransaccionOCR(prisma, ocrTx.id, { categoria: "COMIDA" }).catch(() => {});
+      await corregirTransaccionOCR(prisma, ocrTx.id, { categoriaId: "cat-comida" }).catch(() => {});
       const saldoTras2 = await calcularSaldo(prisma, cuenta.id);
       if (saldoTras2 !== saldoDesp) throw new Error("Double OCR correction should not change saldo again");
     }

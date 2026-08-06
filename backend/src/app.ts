@@ -1,12 +1,13 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
-import { PrismaClient, Categoria, OrigenTransaccion, EstadoTransaccion, type Cuenta, type Transaccion } from "@prisma/client";
+import { PrismaClient, OrigenTransaccion, EstadoTransaccion, type Cuenta, type Transaccion } from "@prisma/client";
 import { z, ZodError } from "zod";
 import { toCuentaResumenDTO, toCuentaDTO } from "./dto/cuenta";
 import { toResumenDTO } from "./dto/resumen";
 import { toResumenMensualDTO } from "./dto/resumenMensual";
 import { toTransferenciaDTO } from "./dto/transferencia";
 import { toTransaccionDTO } from "./dto/transaccion";
+import { toCategoriaDTO, toSubcategoriaDTO } from "./dto/categoria";
 import { unauthorized, fromZodError, fromDomainError, internalError } from "./dto/error";
 import { toPaginatedDTO } from "./dto/paginated";
 import {
@@ -19,6 +20,8 @@ import {
 } from "./services/transaccion";
 import { calcularSaldo } from "./services/saldo";
 import { calcularResumenMensual } from "./services/resumenMensual";
+import { crearIngreso } from "./services/ingreso";
+import { toIngresoDTO } from "./dto/ingreso";
 
 function normalizeEntity(value: string): string {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
@@ -45,8 +48,12 @@ export function buildApp(prisma: PrismaClient) {
   }
 
   async function toTransaccionResponse(transaccion: Transaccion) {
-    const cuenta = transaccion.cuentaId ? await toCuentaResumen(transaccion.cuentaId) : undefined;
-    return toTransaccionDTO({ transaccion, cuenta });
+    const [cuenta, categoria, subcategoria] = await Promise.all([
+      transaccion.cuentaId ? await toCuentaResumen(transaccion.cuentaId) : undefined,
+      transaccion.categoriaId ? await prisma.categoria.findUnique({ where: { id: transaccion.categoriaId } }) : null,
+      transaccion.subcategoriaId ? await prisma.subcategoria.findUnique({ where: { id: transaccion.subcategoriaId } }) : null,
+    ]);
+    return toTransaccionDTO({ transaccion, cuenta, categoria: categoria!, subcategoria });
   }
 
   app.register(cors, {
@@ -66,6 +73,25 @@ export function buildApp(prisma: PrismaClient) {
   app.setErrorHandler((_error, _request, reply) => internalError(reply));
 
   app.get("/health", async () => ({ status: "ok" }));
+
+  app.post("/api/v1/ingresos", async (request, reply) => {
+    try {
+      const ingreso = await crearIngreso(prisma, request.body as never);
+      const [cuenta, categoria] = await Promise.all([
+        toCuentaResumen(ingreso.cuentaId),
+        prisma.categoria.findUnique({ where: { id: ingreso.categoriaId } }),
+      ]);
+      const subcategoria = ingreso.subcategoriaId
+        ? await prisma.subcategoria.findUnique({ where: { id: ingreso.subcategoriaId } })
+        : null;
+      return reply.code(201).send(toIngresoDTO({ ...ingreso, categoria: categoria!, subcategoria }, cuenta));
+    } catch (error) {
+      if (error instanceof ZodError) return fromZodError(reply, error);
+      if (error instanceof Error && error.message.includes("Unique constraint")) return fromDomainError(reply, new Error("La operación ya fue registrada"));
+      if (error instanceof Error) return fromDomainError(reply, error);
+      return internalError(reply);
+    }
+  });
 
   const CuentaSchema = z.object({
     nombre: z.string().min(1),
@@ -149,7 +175,7 @@ export function buildApp(prisma: PrismaClient) {
   const TransaccionesQuerySchema = z.object({
     cuentaId: z.string().optional(),
     periodo: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional(),
-    categoria: z.nativeEnum(Categoria).optional(),
+    categoriaId: z.string().optional(),
     estado: z.nativeEnum(EstadoTransaccion).optional(),
     tipo: z.enum(["GASTO", "INGRESO"]).optional(),
     page: z.coerce.number().int().min(1).default(1),
@@ -159,11 +185,11 @@ export function buildApp(prisma: PrismaClient) {
   app.get("/api/v1/transacciones", async (request, reply) => {
     try {
       const query = TransaccionesQuerySchema.parse(request.query);
-      const { cuentaId, periodo, categoria, estado, tipo, page, limit } = query;
+      const { cuentaId, periodo, categoriaId, estado, tipo, page, limit } = query;
 
       const where: any = {};
       if (cuentaId) where.cuentaId = cuentaId;
-      if (categoria) where.categoria = categoria;
+      if (categoriaId) where.categoriaId = categoriaId;
       if (estado) where.estado = estado;
       if (tipo === "GASTO") where.monto = { lt: 0 };
       if (tipo === "INGRESO") where.monto = { gt: 0 };
@@ -174,17 +200,41 @@ export function buildApp(prisma: PrismaClient) {
         where.fecha = { gte: start, lt: end };
       }
 
-      const [transacciones, total] = await Promise.all([
-        prisma.transaccion.findMany({
-          where,
-          orderBy: { fecha: "desc" },
-          skip: (page - 1) * limit,
-          take: limit,
-        }),
-        prisma.transaccion.count({ where }),
+      const ingresoWhere: any = {
+        ...(cuentaId ? { cuentaId } : {}),
+        ...(periodo ? { periodoDisponible: periodo } : {}),
+        ...(categoriaId ? { categoriaId } : {}),
+      };
+      const includeIngresos = !estado && tipo !== "GASTO";
+      const includeTransacciones = tipo !== "INGRESO";
+      const [transacciones, ingresos] = await Promise.all([
+        includeTransacciones ? prisma.transaccion.findMany({ where }) : [],
+        includeIngresos ? prisma.ingreso.findMany({ where: ingresoWhere, include: { categoria: true, subcategoria: true } }) : [],
       ]);
 
-      const items = await Promise.all(transacciones.map(toTransaccionResponse));
+      const transactionItems = await Promise.all(transacciones.map(toTransaccionResponse));
+      const incomeItems = await Promise.all(ingresos.map(async (income) => ({
+        id: income.id,
+        monto: Number(income.monto),
+        moneda: "ARS",
+        origen: "MANUAL" as const,
+        categoria: {
+          id: income.categoria.id,
+          nombre: income.categoria.nombre,
+          icono: income.categoria.icono,
+          color: income.categoria.color,
+          tipo: income.categoria.tipo,
+          activa: income.categoria.activa,
+        },
+        subcategoria: income.subcategoria ?? undefined,
+        fecha: income.fechaCobro.toISOString(),
+        estado: "CONFIRMADA" as const,
+        esTransferenciaAPersona: false,
+        cuenta: await toCuentaResumen(income.cuentaId),
+      })));
+      const allItems = [...transactionItems, ...incomeItems].sort((a, b) => b.fecha.localeCompare(a.fecha));
+      const total = allItems.length;
+      const items = allItems.slice((page - 1) * limit, page * limit);
       return reply.send(toPaginatedDTO(items, page, limit, total));
     } catch (error) {
       if (error instanceof ZodError) return fromZodError(reply, error);
@@ -229,7 +279,8 @@ export function buildApp(prisma: PrismaClient) {
   const GastoSchema = z.object({
     monto: z.string().or(z.number()),
     cuentaId: z.string(),
-    categoria: z.nativeEnum(Categoria),
+    categoriaId: z.string(),
+    subcategoriaId: z.string().optional(),
     origen: z.nativeEnum(OrigenTransaccion),
     idempotencyKey: z.string(),
     fecha: z.string().optional(),
@@ -275,10 +326,11 @@ export function buildApp(prisma: PrismaClient) {
 
   const CorregirOCRSchema = z.object({
     monto: z.string().or(z.number()).optional(),
-    categoria: z.nativeEnum(Categoria).optional(),
+    categoriaId: z.string().optional(),
     comercio: z.string().optional(),
     fecha: z.string().optional(),
     cuentaId: z.string().optional(),
+    subcategoriaId: z.string().optional(),
   });
 
   const TransferenciaSchema = z.object({
@@ -353,9 +405,11 @@ export function buildApp(prisma: PrismaClient) {
   });
 
   const ResolverCategoriaSchema = z.object({
-    categoria: z.nativeEnum(Categoria),
+    categoriaId: z.string(),
     comercio: z.string().optional(),
     fecha: z.string().optional(),
+    subcategoriaId: z.string().optional(),
+    cuentaId: z.string().optional(),
   });
 
   app.patch("/api/v1/transacciones/:id/categoria", async (request, reply) => {
@@ -364,6 +418,193 @@ export function buildApp(prisma: PrismaClient) {
       const data = ResolverCategoriaSchema.parse(request.body);
       const resultado = await resolverCategoriaPendienteTransaccion(prisma, params.id, data);
       return reply.code(200).send(await toTransaccionResponse(resultado));
+    } catch (error) {
+      if (error instanceof ZodError) return fromZodError(reply, error);
+      if (error instanceof Error) return fromDomainError(reply, error);
+      return internalError(reply);
+    }
+  });
+
+  const CategoriaSchema = z.object({
+    nombre: z.string().min(1).max(30),
+    icono: z.enum(["UTENSILIOS_COCINA", "CARRO", "CASA", "LLAVE", "TELEFONO", "CORAZON", "OCULOS", "SUPER", "GIMNASIO", "LIBROS", "AVION", "OTRO"]),
+    color: z.enum(["ROJO", "NARANJA", "AMARILLO", "VERDE", "AZUL", "INDIGO", "VIOLETA", "ROSA", "PEZ", "TURQUESA", "BLANCO", "NEGRO"]),
+    tipo: z.enum(["GASTO", "INGRESO"]),
+    activa: z.boolean().optional(),
+  });
+
+  const CategoriaUpdateSchema = CategoriaSchema.partial();
+
+  app.get("/api/v1/categorias", async (request, reply) => {
+    try {
+      const query = z.object({
+        tipo: z.enum(["GASTO", "INGRESO"]).optional(),
+        activa: z.coerce.boolean().optional(),
+      }).parse(request.query);
+
+      const where: any = {};
+      if (query.tipo) where.tipo = query.tipo;
+      if (query.activa !== undefined) where.activa = query.activa;
+
+      const categorias = await prisma.categoria.findMany({ where, orderBy: { nombre: "asc" } });
+      return reply.send(categorias.map(toCategoriaDTO));
+    } catch (error) {
+      if (error instanceof ZodError) return fromZodError(reply, error);
+      if (error instanceof Error) return fromDomainError(reply, error);
+      return internalError(reply);
+    }
+  });
+
+  app.post("/api/v1/categorias", async (request, reply) => {
+    try {
+      const data = CategoriaSchema.parse(request.body);
+      const categoria = await prisma.categoria.create({
+        data: {
+          nombre: data.nombre,
+          icono: data.icono as any,
+          color: data.color as any,
+          tipo: data.tipo as any,
+          activa: data.activa ?? true,
+        },
+      });
+      return reply.code(201).send(toCategoriaDTO(categoria));
+    } catch (error) {
+      if (error instanceof ZodError) return fromZodError(reply, error);
+      if (error instanceof Error && error.message.includes("Unique constraint")) return fromDomainError(reply, new Error("Categoría ya existe"));
+      if (error instanceof Error) return fromDomainError(reply, error);
+      return internalError(reply);
+    }
+  });
+
+  app.patch("/api/v1/categorias/:id", async (request, reply) => {
+    try {
+      const params = z.object({ id: z.string() }).parse(request.params);
+      const data = CategoriaUpdateSchema.parse(request.body);
+      if (Object.keys(data).length === 0) {
+        throw new Error("Debe indicar al menos un campo para actualizar");
+      }
+
+      const categoria = await prisma.categoria.findUnique({ where: { id: params.id } });
+      if (!categoria) throw new Error("Categoría no encontrada");
+
+      const updated = await prisma.categoria.update({
+        where: { id: params.id },
+        data: {
+          nombre: data.nombre,
+          icono: data.icono as any,
+          color: data.color as any,
+          tipo: data.tipo as any,
+          activa: data.activa,
+        },
+      });
+      return reply.send(toCategoriaDTO(updated));
+    } catch (error) {
+      if (error instanceof ZodError) return fromZodError(reply, error);
+      if (error instanceof Error && error.message.includes("Unique constraint")) return fromDomainError(reply, new Error("Categoría ya existe"));
+      if (error instanceof Error) return fromDomainError(reply, error);
+      return internalError(reply);
+    }
+  });
+
+  app.get("/api/v1/subcategorias", async (request, reply) => {
+    try {
+      const query = z.object({
+        categoriaId: z.string().optional(),
+      }).parse(request.query);
+
+      const where: any = {};
+      if (query.categoriaId) where.categoriaId = query.categoriaId;
+
+      const subcategorias = await prisma.subcategoria.findMany({
+        where,
+        include: { categoria: true },
+        orderBy: { nombre: "asc" },
+      });
+      return reply.send(subcategorias.map(toSubcategoriaDTO));
+    } catch (error) {
+      if (error instanceof ZodError) return fromZodError(reply, error);
+      if (error instanceof Error) return fromDomainError(reply, error);
+      return internalError(reply);
+    }
+  });
+
+  const SubcategoriaSchema = z.object({
+    nombre: z.string().min(1).max(30),
+    categoriaId: z.string(),
+  });
+
+  const SubcategoriaUpdateSchema = z.object({
+    nombre: z.string().min(1).max(30).optional(),
+    categoriaId: z.string().optional(),
+    activa: z.boolean().optional(),
+  });
+
+  app.post("/api/v1/subcategorias", async (request, reply) => {
+    try {
+      const data = SubcategoriaSchema.parse(request.body);
+      const categoria = await prisma.categoria.findUnique({ where: { id: data.categoriaId } });
+      if (!categoria) throw new Error("Categoría no encontrada");
+
+      const subcategoria = await prisma.subcategoria.create({
+        data: {
+          nombre: data.nombre,
+          categoriaId: data.categoriaId,
+        },
+        include: { categoria: true },
+      });
+      return reply.code(201).send(toSubcategoriaDTO(subcategoria));
+    } catch (error) {
+      if (error instanceof ZodError) return fromZodError(reply, error);
+      if (error instanceof Error && error.message.includes("Unique constraint")) return fromDomainError(reply, new Error("Subcategoría ya existe"));
+      if (error instanceof Error) return fromDomainError(reply, error);
+      return internalError(reply);
+    }
+  });
+
+  app.patch("/api/v1/subcategorias/:id", async (request, reply) => {
+    try {
+      const params = z.object({ id: z.string() }).parse(request.params);
+      const data = SubcategoriaUpdateSchema.parse(request.body);
+      if (Object.keys(data).length === 0) {
+        throw new Error("Debe indicar al menos un campo para actualizar");
+      }
+
+      const subcategoria = await prisma.subcategoria.findUnique({
+        where: { id: params.id },
+        include: { categoria: true },
+      });
+      if (!subcategoria) throw new Error("Subcategoría no encontrada");
+
+      const updated = await prisma.subcategoria.update({
+        where: { id: params.id },
+        data: {
+          nombre: data.nombre,
+          categoriaId: data.categoriaId,
+        },
+        include: { categoria: true },
+      });
+      return reply.send(toSubcategoriaDTO(updated));
+    } catch (error) {
+      if (error instanceof ZodError) return fromZodError(reply, error);
+      if (error instanceof Error && error.message.includes("Unique constraint")) return fromDomainError(reply, new Error("Subcategoría ya existe"));
+      if (error instanceof Error) return fromDomainError(reply, error);
+      return internalError(reply);
+    }
+  });
+
+  app.delete("/api/v1/subcategorias/:id", async (request, reply) => {
+    try {
+      const params = z.object({ id: z.string() }).parse(request.params);
+      const subcategoria = await prisma.subcategoria.findUnique({ where: { id: params.id } });
+      if (!subcategoria) throw new Error("Subcategoría no encontrada");
+
+      const transaccionesCount = await prisma.transaccion.count({ where: { subcategoriaId: params.id } });
+      if (transaccionesCount > 0) {
+        throw new Error("No se puede archivar una subcategoría con transacciones asociadas");
+      }
+
+      await prisma.subcategoria.delete({ where: { id: params.id } });
+      return reply.code(204).send();
     } catch (error) {
       if (error instanceof ZodError) return fromZodError(reply, error);
       if (error instanceof Error) return fromDomainError(reply, error);

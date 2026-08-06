@@ -1,8 +1,16 @@
-import { Categoria, EstadoTransaccion, PrismaClient, TipoCuenta } from "@prisma/client";
+import { EstadoTransaccion, PrismaClient, TipoCuenta } from "@prisma/client";
 import calcularSaldo from "./saldo";
 
+type CategoriaConNombre = {
+  id: string;
+  nombre: string;
+  icono: string;
+  color: string;
+  tipo: "GASTO" | "INGRESO";
+};
+
 export interface GastoCategoriaData {
-  categoria: Categoria;
+  categoria: CategoriaConNombre;
   monto: number;
   porcentaje: number;
 }
@@ -32,9 +40,10 @@ export async function calcularResumenMensual(
         estado: EstadoTransaccion.CONFIRMADA,
         fecha: { gte: start, lt: end },
       },
+      include: { categoria: true },
     }),
     prisma.ingreso.findMany({
-      where: { fechaCobro: { gte: start, lt: end } },
+      where: { periodoDisponible: periodo },
     }),
     prisma.cuenta.findMany(),
   ]);
@@ -48,16 +57,30 @@ export async function calcularResumenMensual(
   const ingresosTotal = ingresos.reduce((acc, i) => acc + Number(i.monto), 0);
 
   // gastos por categoria
-  const porCategoria = new Map<Categoria, number>();
+  const porCategoria = new Map<string, { categoria: CategoriaConNombre; monto: number }>();
   for (const t of transacciones) {
     const m = Number(t.monto);
-    if (m < 0) {
-      porCategoria.set(t.categoria, (porCategoria.get(t.categoria) ?? 0) + Math.abs(m));
+    if (m < 0 && t.categoria) {
+      const existing = porCategoria.get(t.categoria.id);
+      if (existing) {
+        existing.monto += Math.abs(m);
+      } else {
+        porCategoria.set(t.categoria.id, {
+          categoria: {
+            id: t.categoria.id,
+            nombre: t.categoria.nombre,
+            icono: t.categoria.icono,
+            color: t.categoria.color,
+            tipo: t.categoria.tipo,
+          },
+          monto: Math.abs(m),
+        });
+      }
     }
   }
 
-  const gastosPorCategoria: GastoCategoriaData[] = Array.from(porCategoria.entries())
-    .map(([categoria, monto]) => ({
+  const gastosPorCategoria: GastoCategoriaData[] = Array.from(porCategoria.values())
+    .map(({ categoria, monto }) => ({
       categoria,
       monto: Number(monto.toFixed(2)),
       porcentaje: gastosTotal > 0 ? Number(((monto / gastosTotal) * 100).toFixed(2)) : 0,

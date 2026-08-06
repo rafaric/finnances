@@ -13,11 +13,11 @@ async function run() {
     });
 
     await crearTransaccion(prisma, {
-      monto: "50", cuentaId: cuenta.id, categoria: "OTROS",
+      monto: "50", cuentaId: cuenta.id, categoriaId: "cat-otros",
       origen: "MANUAL", idempotencyKey: `saldo-1-${ts}`,
     } as any);
     await crearTransaccion(prisma, {
-      monto: "20", cuentaId: cuenta.id, categoria: "OTROS",
+      monto: "20", cuentaId: cuenta.id, categoriaId: "cat-otros",
       origen: "MANUAL", idempotencyKey: `saldo-2-${ts}`,
     } as any);
 
@@ -31,7 +31,7 @@ async function run() {
 
     // ── 2. gasto pendiente no modifica saldo ──────────────────────────────────
     await crearTransaccion(prisma, {
-      monto: "100", cuentaId: cuenta.id, categoria: "OTROS",
+      monto: "100", cuentaId: cuenta.id, categoriaId: "cat-otros",
       origen: "MANUAL", idempotencyKey: `saldo-pendiente-${ts}`,
       estado: "PENDIENTE_REVISION",
     } as any);

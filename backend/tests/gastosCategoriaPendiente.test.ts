@@ -49,19 +49,19 @@ async function run() {
       prisma,
       pending.id,
       {
-        categoria: "COMIDA",
+        categoriaId: "cat-comida",
         comercio: "Kiosco",
       },
     );
 
     console.log("resolved estado:", resolved.estado);
-    console.log("resolved categoria:", resolved.categoria);
+    console.log("resolved categoriaId:", resolved.categoriaId);
 
     if (resolved.estado !== "CONFIRMADA") {
       throw new Error("Expected resolved transaction to be CONFIRMADA");
     }
-    if (resolved.categoria !== "COMIDA") {
-      throw new Error("Expected resolved transaction categoria to be COMIDA");
+    if (resolved.categoriaId !== "cat-comida") {
+      throw new Error("Expected resolved transaction categoriaId to be cat-comida");
     }
 
     const cuentaAfter = await prisma.cuenta.findUnique({

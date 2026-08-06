@@ -1,5 +1,20 @@
-import type { Categoria, EstadoTransaccion, OrigenTransaccion, Transaccion } from "@prisma/client";
+import type { EstadoTransaccion, OrigenTransaccion, Transaccion, Categoria, Subcategoria } from "@prisma/client";
 import type { CuentaResumenDTO } from "./cuenta";
+
+export interface CategoriaResponseDTO {
+  id: string;
+  nombre: string;
+  icono: string;
+  color: string;
+  tipo: "GASTO" | "INGRESO";
+  activa: boolean;
+}
+
+export interface SubcategoriaResponseDTO {
+  id: string;
+  nombre: string;
+  categoriaId: string;
+}
 
 export interface TransaccionResponseDTO {
   id: string;
@@ -7,7 +22,8 @@ export interface TransaccionResponseDTO {
   moneda: string;
   comercio?: string;
   origen: OrigenTransaccion;
-  categoria: Categoria;
+  categoria: CategoriaResponseDTO;
+  subcategoria?: SubcategoriaResponseDTO;
   fecha: string;
   estado: EstadoTransaccion;
   cuenta?: CuentaResumenDTO;
@@ -23,17 +39,22 @@ export interface ToTransaccionDTOInput {
     | "moneda"
     | "comercio"
     | "origen"
-    | "categoria"
+    | "categoriaId"
+    | "subcategoriaId"
     | "fecha"
     | "estado"
-     | "textoCrudoOCR"
-     | "esTransferenciaAPersona"
+    | "textoCrudoOCR"
+    | "esTransferenciaAPersona"
   >;
+  categoria: Pick<Categoria, "id" | "nombre" | "icono" | "color" | "tipo" | "activa">;
+  subcategoria?: Pick<Subcategoria, "id" | "nombre" | "categoriaId"> | null;
   cuenta?: CuentaResumenDTO;
 }
 
 export function toTransaccionDTO({
   transaccion,
+  categoria,
+  subcategoria,
   cuenta,
 }: ToTransaccionDTOInput): TransaccionResponseDTO {
   return {
@@ -42,7 +63,21 @@ export function toTransaccionDTO({
     moneda: transaccion.moneda,
     comercio: transaccion.comercio ?? undefined,
     origen: transaccion.origen,
-    categoria: transaccion.categoria,
+    categoria: {
+      id: categoria.id,
+      nombre: categoria.nombre,
+      icono: categoria.icono,
+      color: categoria.color,
+      tipo: categoria.tipo,
+      activa: categoria.activa,
+    },
+    subcategoria: subcategoria
+      ? {
+          id: subcategoria.id,
+          nombre: subcategoria.nombre,
+          categoriaId: subcategoria.categoriaId,
+        }
+      : undefined,
     fecha: transaccion.fecha.toISOString(),
     estado: transaccion.estado,
     cuenta,

@@ -1,8 +1,15 @@
-import type { Categoria } from "@prisma/client";
 import type { ResumenMensualData, GastoCategoriaData } from "../services/resumenMensual";
 
+export interface CategoriaDTO {
+  id: string;
+  nombre: string;
+  icono: string;
+  color: string;
+  tipo: "GASTO" | "INGRESO";
+}
+
 export interface GastoCategoriaDTO {
-  categoria: Categoria;
+  categoria: CategoriaDTO;
   monto: number;
   porcentaje: number;
 }
@@ -26,7 +33,13 @@ export function toResumenMensualDTO(data: ResumenMensualData): ResumenMensualDTO
     ahorro: data.ahorro,
     margen: data.margen,
     gastosPorCategoria: data.gastosPorCategoria.map((g: GastoCategoriaData) => ({
-      categoria: g.categoria,
+      categoria: {
+        id: g.categoria.id,
+        nombre: g.categoria.nombre,
+        icono: g.categoria.icono,
+        color: g.categoria.color,
+        tipo: g.categoria.tipo,
+      },
       monto: g.monto,
       porcentaje: g.porcentaje,
     })),

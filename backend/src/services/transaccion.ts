@@ -3,9 +3,9 @@ import {
   PrismaClient,
   Transaccion,
   Resumen,
-  Categoria,
   OrigenTransaccion,
   EstadoTransaccion,
+  TipoCategoria,
 } from "@prisma/client";
 import { z } from "zod";
 import { interpretarConGemini } from "./geminiOCR";
@@ -13,7 +13,8 @@ import { interpretarConGemini } from "./geminiOCR";
 const TransaccionSchema = z.object({
   monto: z.string().or(z.number()),
   cuentaId: z.string().optional(),
-  categoria: z.nativeEnum(Categoria),
+  categoriaId: z.string(),
+  subcategoriaId: z.string().optional(),
   origen: z.nativeEnum(OrigenTransaccion),
   idempotencyKey: z.string(),
   fecha: z.string().optional(),
@@ -28,6 +29,28 @@ export type CrearTransaccionInput = z.infer<typeof TransaccionSchema>;
 
 function normalizeEntity(value: string): string {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+async function resolveCategoriaIdByName(prisma: PrismaClient, nombre: string): Promise<string | undefined> {
+  const categoria = await prisma.categoria.findFirst({
+    where: { nombre: { equals: nombre, mode: "insensitive" } },
+  });
+  return categoria?.id;
+}
+
+function categoriaNombreToId(nombre: string | undefined): string | undefined {
+  if (!nombre) return undefined;
+  const upper = nombre.toUpperCase();
+  const map: Record<string, string> = {
+    COMIDA: "cat-comida",
+    TRANSPORTE: "cat-transporte",
+    VIVIENDA: "cat-vivienda",
+    SERVICIOS: "cat-servicios",
+    OCIO: "cat-ocio",
+    DEUDAS: "cat-deudas",
+    OTROS: "cat-otros",
+  };
+  return map[upper];
 }
 
 async function resolverCuentaOCR(prisma: PrismaClient, textoCrudo: string): Promise<string | undefined> {
@@ -126,31 +149,31 @@ function extractCurrencyAmount(text: string): string | undefined {
   return undefined;
 }
 
-function inferCategoria(text: string): Categoria | undefined {
-  const mappings: Array<{ re: RegExp; category: Categoria }> = [
+function inferCategoria(text: string): string | undefined {
+  const mappings: Array<{ re: RegExp; category: string }> = [
     {
       re: /\b(almuerzo|restaurante|comida|pizzeria|cafe|bar|caf[eé])\b/i,
-      category: Categoria.COMIDA,
+      category: "COMIDA",
     },
     {
       re: /\b(uber|taxi|boleto|transporte|tren|colectivo|bus|metro|subte|viaje)\b/i,
-      category: Categoria.TRANSPORTE,
+      category: "TRANSPORTE",
     },
     {
       re: /\b(alquiler|hipoteca|departamento|casa|vivienda|renta)\b/i,
-      category: Categoria.VIVIENDA,
+      category: "VIVIENDA",
     },
     {
       re: /\b(luz|agua|gas|internet|celular|telefon[oó]|servicios?)\b/i,
-      category: Categoria.SERVICIOS,
+      category: "SERVICIOS",
     },
     {
       re: /\b(cine|teatro|hotel|ocio|entretenimiento|musica|spotify|netflix)\b/i,
-      category: Categoria.OCIO,
+      category: "OCIO",
     },
     {
       re: /\b(pago|cuota|prestamo|deuda|tarjeta|saldo)\b/i,
-      category: Categoria.DEUDAS,
+      category: "DEUDAS",
     },
   ];
 
@@ -179,15 +202,12 @@ function parseDateValue(text: string | undefined): string | undefined {
 function interpretarOCR(textoCrudo: string, fallback?: OCRFallbackData) {
   const texto = textoCrudo.trim();
   let monto = fallback?.monto ? normalizeAmount(fallback.monto) : undefined;
-  let categoria: Categoria | undefined = undefined;
+  let categoria: string | undefined = undefined;
   let comercio = fallback?.comercio;
   let fecha = fallback?.fecha ? parseDateValue(fallback.fecha) : undefined;
 
   if (fallback?.categoria) {
-    const categoriaUpper = fallback.categoria.toUpperCase();
-    if (Object.values(Categoria).includes(categoriaUpper as Categoria)) {
-      categoria = categoriaUpper as Categoria;
-    }
+    categoria = fallback.categoria.toUpperCase();
   }
 
   try {
@@ -196,10 +216,7 @@ function interpretarOCR(textoCrudo: string, fallback?: OCRFallbackData) {
       if (!monto && candidate.monto != null)
         monto = normalizeAmount(candidate.monto);
       if (!categoria && typeof candidate.categoria === "string") {
-        const categoriaUpper = candidate.categoria.toUpperCase();
-        if (Object.values(Categoria).includes(categoriaUpper as Categoria)) {
-          categoria = categoriaUpper as Categoria;
-        }
+        categoria = candidate.categoria.toUpperCase();
       }
       if (!comercio && typeof candidate.comercio === "string")
         comercio = candidate.comercio;
@@ -249,6 +266,9 @@ export async function crearTransaccion(
   if (estado === EstadoTransaccion.CONFIRMADA && !data.cuentaId) {
     throw new Error("No se puede confirmar una transaccion sin cuenta");
   }
+  const categoria = await prisma.categoria.findUnique({ where: { id: data.categoriaId } });
+  if (!categoria) throw new Error("Categoría no encontrada");
+
   const monto =
     estado === EstadoTransaccion.CONFIRMADA
       ? normalizarMontoGasto(data.monto)
@@ -263,7 +283,8 @@ export async function crearTransaccion(
         moneda: "ARS",
         origen: data.origen,
         cuentaId: data.cuentaId,
-        categoria: data.categoria,
+        categoriaId: data.categoriaId,
+        subcategoriaId: data.subcategoriaId,
         idempotencyKey: data.idempotencyKey,
         comercio: data.comercio,
         fecha: data.fecha ? new Date(data.fecha) : new Date(),
@@ -291,10 +312,11 @@ export async function crearTransaccion(
 
 const CorregirOCRSchema = z.object({
   monto: z.string().or(z.number()).optional(),
-  categoria: z.nativeEnum(Categoria).optional(),
+  categoriaId: z.string().optional(),
   comercio: z.string().optional(),
   fecha: z.string().optional(),
   cuentaId: z.string().optional(),
+  subcategoriaId: z.string().optional(),
 });
 
 export type CorregirTransaccionOCRInput = z.infer<typeof CorregirOCRSchema>;
@@ -430,9 +452,9 @@ export async function corregirTransaccionOCR(
     fecha = new Date(parsed);
   }
 
-  const updatedCategoria = data.categoria ?? transaccion.categoria;
+  const updatedCategoriaId = data.categoriaId ?? transaccion.categoriaId;
   const cuentaId = data.cuentaId ?? transaccion.cuentaId;
-  const shouldConfirm = Number(normalizedMonto) !== 0 && Boolean(updatedCategoria);
+  const shouldConfirm = Number(normalizedMonto) !== 0 && Boolean(updatedCategoriaId);
   if (shouldConfirm && !cuentaId) throw new Error("No se puede confirmar una transaccion sin cuenta");
 
   const updated = await prisma.$transaction(async (tx) => {
@@ -440,7 +462,8 @@ export async function corregirTransaccionOCR(
       where: { id: transaccion.id },
       data: {
         monto: normalizedMonto ?? transaccion.monto.toString(),
-        categoria: updatedCategoria,
+        categoriaId: updatedCategoriaId,
+        subcategoriaId: data.subcategoriaId ?? transaccion.subcategoriaId,
         comercio: data.comercio ?? transaccion.comercio,
         fecha,
         estado: shouldConfirm
@@ -455,10 +478,11 @@ export async function corregirTransaccionOCR(
 }
 
 const ResolverCategoriaSchema = z.object({
-  categoria: z.nativeEnum(Categoria),
+  categoriaId: z.string(),
   comercio: z.string().optional(),
   fecha: z.string().optional(),
   cuentaId: z.string().optional(),
+  subcategoriaId: z.string().optional(),
 });
 
 export type ResolverCategoriaPendienteInput = z.infer<
@@ -496,11 +520,15 @@ export async function resolverCategoriaPendienteTransaccion(
     fecha = new Date(parsed);
   }
 
+  const categoria = await prisma.categoria.findUnique({ where: { id: data.categoriaId } });
+  if (!categoria) throw new Error("Categoría no encontrada");
+
   const updated = await prisma.$transaction(async (tx) => {
     return tx.transaccion.update({
       where: { id: transaccion.id },
       data: {
-        categoria: data.categoria,
+        categoriaId: data.categoriaId,
+        subcategoriaId: data.subcategoriaId ?? transaccion.subcategoriaId,
         comercio: data.comercio ?? transaccion.comercio,
         fecha,
         estado: EstadoTransaccion.CONFIRMADA,
@@ -523,36 +551,41 @@ export async function crearTransaccionOCR(
     heuristic.esTransferenciaAPersona = true;
   }
   let interpreted = heuristic;
+  let categoriaNombre: string | undefined = heuristic.categoria;
+
   if (process.env.GEMINI_API_KEY && process.env.NODE_ENV !== "test") {
     try {
       const ai = await interpretarConGemini(data.textoCrudo);
       if (ai) {
-        const categoria = ai.categoria?.toUpperCase();
         interpreted = {
           monto: ai.monto == null ? undefined : String(ai.monto),
-          categoria: categoria && Object.values(Categoria).includes(categoria as Categoria) ? categoria as Categoria : undefined,
+          categoria: ai.categoria ?? undefined,
           comercio: ai.comercio ?? undefined,
           fecha: ai.fecha ?? undefined,
           esTransferenciaAPersona: ai.esTransferenciaAPersona,
-          exito: Boolean(ai.monto && categoria && Object.values(Categoria).includes(categoria as Categoria)),
+          exito: Boolean(ai.monto && ai.categoria),
         };
+        categoriaNombre = ai.categoria ?? heuristic.categoria;
       }
     } catch {
       interpreted = { monto: undefined, categoria: undefined, comercio: undefined, fecha: undefined, esTransferenciaAPersona: false, exito: false };
+      categoriaNombre = undefined;
     }
   }
 
+  const categoriaId = categoriaNombre ? categoriaNombreToId(categoriaNombre) : undefined;
+
   const esTransferenciaAPersona = "esTransferenciaAPersona" in interpreted && interpreted.esTransferenciaAPersona === true;
-  const estado = interpreted.exito && cuentaId && !esTransferenciaAPersona
+  const estado = interpreted.exito && cuentaId && categoriaId && !esTransferenciaAPersona
     ? EstadoTransaccion.CONFIRMADA
-      : cuentaId && interpreted.monto && (!interpreted.categoria || esTransferenciaAPersona)
+      : cuentaId && interpreted.monto && (!categoriaId || esTransferenciaAPersona)
         ? EstadoTransaccion.PENDIENTE_CATEGORIA
         : EstadoTransaccion.PENDIENTE_REVISION;
 
   return crearTransaccion(prisma, {
     monto: interpreted.monto ?? "0",
     cuentaId,
-    categoria: interpreted.categoria ?? Categoria.OTROS,
+    categoriaId: categoriaId ?? "cat-otros",
     origen: OrigenTransaccion.OCR_IA,
     idempotencyKey: data.idempotencyKey,
     comercio: interpreted.comercio,

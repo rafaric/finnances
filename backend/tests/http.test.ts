@@ -28,7 +28,8 @@ function assertTransaccionShape(body: any) {
   if (typeof body.monto !== "number") throw new Error("monto must be number");
   if (typeof body.moneda !== "string") throw new Error("moneda must be string");
   if (typeof body.origen !== "string") throw new Error("origen must be string");
-  if (typeof body.categoria !== "string") throw new Error("categoria must be string");
+  if (typeof body.categoria.id !== "string") throw new Error("categoria.id must be string");
+  if (typeof body.categoria.nombre !== "string") throw new Error("categoria.nombre must be string");
   if (typeof body.fecha !== "string") throw new Error("fecha must be ISO string");
   if (typeof body.estado !== "string") throw new Error("estado must be string");
   if (body.estado === "CONFIRMADA") {
@@ -70,7 +71,7 @@ function assertResumenMensualShape(body: any) {
     throw new Error("summary.gastosPorCategoria must be array");
   }
   body.gastosPorCategoria.forEach((item: any) => {
-    if (typeof item.categoria !== "string") throw new Error("category must be string");
+    if (typeof item.categoria?.id !== "string") throw new Error("category.id must be string");
     if (typeof item.monto !== "number") throw new Error("category monto must be number");
     if (typeof item.porcentaje !== "number") throw new Error("category porcentaje must be number");
   });
@@ -168,14 +169,14 @@ async function run() {
   {
     const res = await app.inject({
       method: "POST", url: "/api/v1/gastos", headers: AUTH,
-      payload: { monto: "150", cuentaId: cuenta.id, categoria: "COMIDA", origen: "MANUAL", idempotencyKey: `http-gasto-${ts}`, comercio: "Mercado" },
+      payload: { monto: "150", cuentaId: cuenta.id, categoriaId: "cat-otros", origen: "MANUAL", idempotencyKey: `http-gasto-${ts}`, comercio: "Mercado" },
     });
     if (res.statusCode !== 201) throw new Error(`POST /gastos: expected 201, got ${res.statusCode} — ${res.body}`);
     const body = res.json();
     assertTransaccionShape(body);
     if (body.monto !== -150) throw new Error(`monto should be -150, got ${body.monto}`);
     if (body.moneda !== "ARS") throw new Error("moneda should be ARS");
-    if (body.categoria !== "COMIDA") throw new Error("categoria mismatch");
+    if (body.categoria.id !== "cat-otros") throw new Error("categoria mismatch");
     if (body.estado !== "CONFIRMADA") throw new Error("estado should be CONFIRMADA");
     if (body.cuenta.saldoActual !== 850) throw new Error(`saldoActual should be 850, got ${body.cuenta.saldoActual}`);
     console.log("✓ POST /api/v1/gastos — TransaccionResponseDTO shape + values");
@@ -214,14 +215,14 @@ async function run() {
     if (resPeriodo.statusCode !== 200) throw new Error(`periodo filter: expected 200, got ${resPeriodo.statusCode}`);
     console.log("✓ GET /api/v1/transacciones?periodo — filter works");
 
-    // filtro por categoria
+    // filtro por categoriaId
     const resCategoria = await app.inject({
-      method: "GET", url: `/api/v1/transacciones?categoria=COMIDA`, headers: AUTH,
+      method: "GET", url: `/api/v1/transacciones?categoriaId=cat-otros`, headers: AUTH,
     });
     const bodyCategoria = resCategoria.json();
-    if (bodyCategoria.items.some((t: any) => t.categoria !== "COMIDA"))
-      throw new Error("categoria filter returned wrong transactions");
-    console.log("✓ GET /api/v1/transacciones?categoria — filter works");
+    if (bodyCategoria.items.some((t: any) => t.categoria.id !== "cat-otros"))
+      throw new Error("categoriaId filter returned wrong transactions");
+    console.log("✓ GET /api/v1/transacciones?categoriaId — filter works");
 
     // filtro por estado
     const resEstado = await app.inject({
@@ -285,7 +286,7 @@ async function run() {
 
     const correctionRes = await app.inject({
       method: "PATCH", url: `/api/v1/gastos/ocr/${pending.id}/corregir`, headers: AUTH,
-      payload: { monto: "1", categoria: "OTROS", cuentaId },
+      payload: { monto: "1", categoriaId: "cat-otros", cuentaId },
     });
     if (correctionRes.statusCode !== 200) throw new Error(`pending correction: expected 200, got ${correctionRes.statusCode} — ${correctionRes.body}`);
     const corrected = correctionRes.json();
@@ -300,7 +301,7 @@ async function run() {
     if (t && (t.estado === "PENDIENTE_REVISION" || t.estado === "PENDIENTE_CATEGORIA")) {
       const res = await app.inject({
         method: "PATCH", url: `/api/v1/gastos/ocr/${ocrId}/corregir`, headers: AUTH,
-        payload: { categoria: "COMIDA", monto: "200" },
+        payload: { categoriaId: "cat-comida", monto: "200" },
       });
       if (res.statusCode !== 200) throw new Error(`PATCH /corregir: expected 200, got ${res.statusCode} — ${res.body}`);
       const body = res.json();
@@ -323,12 +324,12 @@ async function run() {
     if (t?.estado === "PENDIENTE_CATEGORIA") {
       const res2 = await app.inject({
         method: "PATCH", url: `/api/v1/transacciones/${ocrCatId}/categoria`, headers: AUTH,
-        payload: { categoria: "DEUDAS" },
+        payload: { categoriaId: "cat-deudas" },
       });
       if (res2.statusCode !== 200) throw new Error(`PATCH /categoria: expected 200, got ${res2.statusCode} — ${res2.body}`);
       const body = res2.json();
       assertTransaccionShape(body);
-      if (body.categoria !== "DEUDAS") throw new Error("categoria mismatch");
+      if (body.categoria.id !== "cat-deudas") throw new Error("categoria mismatch");
       if (body.estado !== "CONFIRMADA") throw new Error("estado should be CONFIRMADA");
       console.log("✓ PATCH /api/v1/transacciones/:id/categoria — TransaccionResponseDTO shape");
     } else {
@@ -407,8 +408,9 @@ async function run() {
         monto: "1200",
         fechaCobro: new Date("2099-11-05T12:00:00.000Z"),
         periodoDisponible: periodo,
-        concepto: "Ingreso HTTP test",
         cuentaId: cuenta.id,
+        categoriaId: "cat-sueldo",
+        idempotencyKey: `income-http-${ts}`,
       },
     });
 
@@ -419,7 +421,7 @@ async function run() {
       payload: {
         monto: "80",
         cuentaId: cuenta.id,
-        categoria: "SERVICIOS",
+        categoriaId: "cat-servicios",
         origen: "MANUAL",
         fecha: "2099-11-10",
         idempotencyKey: `http-summary-expense-${ts}`,
@@ -482,10 +484,10 @@ async function run() {
       throw new Error(`summary ahorro delta should be 1120, got ${body.ahorro - baseline.ahorro}`);
     }
     const servicios = body.gastosPorCategoria.find(
-      (item: { categoria: string }) => item.categoria === "SERVICIOS",
+      (item: { categoria: { id: string } }) => item.categoria.id === "cat-servicios",
     );
     const baselineServicios = baseline.gastosPorCategoria.find(
-      (item: { categoria: string }) => item.categoria === "SERVICIOS",
+      (item: { categoria: { id: string } }) => item.categoria.id === "cat-servicios",
     );
     const serviciosDelta = (servicios?.monto ?? 0) - (baselineServicios?.monto ?? 0);
     if (!servicios || serviciosDelta !== 80) {
@@ -540,7 +542,7 @@ async function run() {
   {
     const res = await app.inject({
       method: "PATCH", url: "/api/v1/gastos/ocr/nonexistent-id/corregir", headers: AUTH,
-      payload: { categoria: "COMIDA" },
+      payload: { categoriaId: "cat-comida" },
     });
     if (res.statusCode !== 404) throw new Error(`not found: expected 404, got ${res.statusCode}`);
     assertErrorShape(res.json(), "NOT_FOUND");
@@ -551,14 +553,14 @@ async function run() {
   {
     const confirmedRes = await app.inject({
       method: "POST", url: "/api/v1/gastos", headers: AUTH,
-      payload: { monto: "50", cuentaId: cuenta.id, categoria: "OTROS", origen: "MANUAL", idempotencyKey: `http-422-${ts}` },
+      payload: { monto: "50", cuentaId: cuenta.id, categoriaId: "cat-otros", origen: "MANUAL", idempotencyKey: `http-422-${ts}` },
     });
     const confirmedId = confirmedRes.json().id;
     const res = await app.inject({
       method: "PATCH", url: `/api/v1/gastos/ocr/${confirmedId}/corregir`, headers: AUTH,
-      payload: { categoria: "COMIDA" },
-    });
-    if (res.statusCode !== 422) throw new Error(`unprocessable: expected 422, got ${res.statusCode}`);
+        payload: { categoriaId: "cat-comida" },
+      });
+      if (res.statusCode !== 422) throw new Error(`unprocessable: expected 422, got ${res.statusCode}`);
     assertErrorShape(res.json(), "UNPROCESSABLE");
     console.log("✓ PATCH /corregir on CONFIRMADA — UNPROCESSABLE ErrorResponseDTO");
   }

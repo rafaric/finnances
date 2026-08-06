@@ -7,11 +7,12 @@ export async function calcularSaldo(
   const cuenta = await prisma.cuenta.findUnique({ where: { id: cuentaId } });
   if (!cuenta) throw new Error("Cuenta no encontrada");
 
-  const [transacciones, transferenciasSalientes, transferenciasEntrantes] =
+  const [transacciones, ingresos, transferenciasSalientes, transferenciasEntrantes] =
     await Promise.all([
       prisma.transaccion.findMany({
         where: { cuentaId, estado: EstadoTransaccion.CONFIRMADA },
       }),
+      prisma.ingreso.findMany({ where: { cuentaId }, select: { monto: true } }),
       prisma.transferenciaInterna.findMany({
         where: { cuentaOrigenId: cuentaId },
       }),
@@ -23,6 +24,7 @@ export async function calcularSaldo(
   const movimientosSum = transacciones.reduce((acc, t) => {
     return acc + Number(t.monto);
   }, 0);
+  const ingresosSum = ingresos.reduce((acc, ingreso) => acc + Number(ingreso.monto), 0);
 
   const transferenciasSalientesSum = transferenciasSalientes.reduce((acc, t) => {
     return acc + Number(t.monto);
@@ -34,7 +36,7 @@ export async function calcularSaldo(
 
   return (
     Number(cuenta.saldoInicial) +
-    movimientosSum -
+    movimientosSum + ingresosSum -
     transferenciasSalientesSum +
     transferenciasEntrantesSum
   );
