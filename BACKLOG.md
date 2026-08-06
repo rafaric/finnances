@@ -1,102 +1,89 @@
 # Backlog
 
-## Épicas
+## Estado actual
 
-### EPIC-1: Dominio y persistencia
-- [ ] Definir esquema de datos según `docs/01-modelo-de-datos.md`.
-- [ ] Implementar migraciones y modelo ORM.
-- [ ] Crear servicios de dominio para `Cuenta`, `Transaccion`, `Resumen`, `Compra`, `Cuota`, `TransferenciaInterna`, `Ingreso`.
-- [ ] Implementar cálculo de saldo derivado y regla de `saldoInicial + movimientos`.
-- [ ] Asegurar `Decimal` para montos y no permitir edición directa de saldo.
+El MVP ya permite registrar y consultar gastos e ingresos manuales, administrar
+cuentas y categorías, transferir entre cuentas, revisar pendientes OCR y
+consultar el resumen mensual. El backend y el frontend tienen suites de tests
+ejecutables de forma aislada.
 
-### EPIC-2: API y reglas de negocio
-- [ ] Implementar `POST /api/v1/gastos`.
-- [ ] Implementar `POST /api/v1/gastos/ocr` con manejo de fallo y estado `PENDIENTE_REVISION`.
-- [ ] Implementar `POST /api/v1/resumenes/ocr`.
-- [ ] Implementar `POST /api/v1/transferencias`.
-- [ ] Implementar `POST /api/v1/recurrentes/:id/confirmar`.
-- [ ] Implementar `POST /api/v1/resumenes/:id/confirmar`.
-- [ ] Implementar `POST /api/v1/transacciones/:id/categoria`.
-- [ ] Implementar idempotencia de transacciones basada en `origen|monto|comercio|fecha`.
-- [ ] Añadir validación de entrada con Zod o esquema equivalente.
-- [ ] Añadir autenticación Bearer token y CORS restringido.
+## Entregado
 
-### EPIC-3: UI/UX de PWA
-- [ ] Diseñar navegación principal: Home, Movimientos, Agregar, Análisis, Metas.
-- [ ] Implementar formulario de nuevo gasto/ingreso.
-- [ ] Implementar listado de movimientos con filtros y estado visual.
-- [ ] Implementar widget de `Pendientes/Vencidos`.
-- [ ] Implementar alta/edición de cuentas con tarjetas de crédito.
-- [ ] Implementar transferencia entre cuentas propias.
-- [ ] Reusar componentes clave: selector de categoría, selector de cuentas, campo de nota, selector de fecha.
+### Dominio y persistencia
 
-### EPIC-4: Captura e integración de plataforma
-- [ ] Documentar y validar payload del Atajo iOS para Apple Pay.
-- [ ] Implementar matching de cuenta por `ultimosDigitos`.
-- [ ] Implementar flujo OCR con Live Text + IA.
-- [ ] Agregar soporte offline básico con IndexedDB.
+- [x] Esquema Prisma y migraciones PostgreSQL.
+- [x] Saldo derivado desde `saldoInicial + movimientos`.
+- [x] Montos `Decimal` y saldo no editable directamente.
+- [x] Idempotencia para gastos, ingresos y transferencias.
+- [x] Categorías y subcategorías gestionables.
+- [x] Ingresos con categoría y subcategoría opcional.
 
-### EPIC-5: Pruebas y calidad
-- [ ] Escribir tests unitarios para servicios de dominio.
-- [ ] Escribir tests de integración para endpoints.
-- [ ] Verificar reglas de tarjetas, confirmación y doble conteo.
-- [ ] Configurar CI básica y herramientas de lint/format.
+### API y reglas de negocio
 
-## Estado del Sprint 1
+- [x] `POST /api/v1/gastos`.
+- [x] `POST /api/v1/ingresos`.
+- [x] `POST /api/v1/gastos/ocr` con estados pendientes.
+- [x] `PATCH /api/v1/gastos/ocr/:id/corregir`.
+- [x] `PATCH /api/v1/transacciones/:id/categoria`.
+- [x] `POST /api/v1/transferencias`.
+- [x] `POST /api/v1/resumenes/ocr`.
+- [x] `GET /api/v1/transacciones` con filtros y paginación.
+- [x] CRUD de categorías y subcategorías.
+- [x] Bearer token, CORS restringido y validación Zod.
 
-Sprint 1 completado en backend:
-- Definición del esquema y migraciones.
-- Lógica de dominio `crearTransaccion()` con idempotencia y balance derivado.
-- Endpoint `POST /api/v1/gastos` con validación básica.
-- Tests de integración/unitarios y CI configurado.
-- Merge a `main` realizado en https://github.com/rafaric/finnances/pull/11.
+### PWA
 
-## Prioridad Sprint 2
+- [x] Home con resumen mensual y cuentas.
+- [x] Formulario de gasto e ingreso.
+- [x] Selector de categorías con iconos y subcategorías opcionales.
+- [x] Listado de movimientos con filtros.
+- [x] Widget de pendientes OCR.
+- [x] Alta y edición de cuentas.
+- [x] Transferencias entre cuentas propias.
+- [x] Administración de categorías.
+- [x] Estado de error y reintento para el resumen mensual.
 
-1. Implementar `POST /api/v1/gastos/ocr` con manejo de fallos y estado `PENDIENTE_REVISION`.
-	- Valida la entrada OCR/IA y no genera 500s por datos incompletos.
-	- Crea transacciones provisionales con estado `PENDIENTE_REVISION` cuando no se puede confirmar automáticamente.
-	- Permite corrección posterior sin duplicar la operación.
+### Calidad y operación
 
-2. Implementar `POST /api/v1/transferencias`.
-	- Ajusta ambos saldos en una transacción DB atómica.
-	- Registra la transferencia y genera la transacción asociada con idempotencia.
+- [x] Tests unitarios/de integración backend.
+- [x] Tests frontend, incluyendo el flujo de ingresos.
+- [x] Base de tests aislada en `finnances_test`.
+- [x] Seed de categorías y subcategorías.
 
-3. Implementar `POST /api/v1/transacciones/:id/categoria`.
-	- Reasigna categoría sin romper la idempotencia original.
-	- Valida existencia y pertenencia de la transacción.
+## Próximo slice: recurrentes y tarjetas
 
-4. Iniciar la UI PWA de nuevo gasto y listado de movimientos.
-	- Crear pantalla de onboarding de gasto con monto, cuenta, categoría y fecha.
-	- Mostrar movimientos recientes con estado y saldo calculado.
+### Gastos recurrentes
 
-5. Documentar API y reglas de balance en `docs/04-api-y-arquitectura-tecnica.md`.
-	- Explicar `saldoInicial + movimientos` como fuente única de verdad.
-	- Definir contratos de los endpoints implementados.
+- [ ] Crear `GastoRecurrente` con cuenta, categoría, frecuencia y monto fijo o variable.
+- [ ] Generar instancias proyectadas sin afectar saldos.
+- [ ] Confirmar una instancia contra una cuenta real.
+- [ ] Omitir una instancia sin crear una transacción.
+- [ ] Mostrar recurrentes proyectados y vencidos en la PWA.
+- [ ] Cubrir idempotencia y transición `PROYECTADO -> CONFIRMADO/OMITIDO`.
 
-## Próximas tareas (alta prioridad)
+### Tarjetas y resúmenes
 
-- Implementar `POST /api/v1/gastos/ocr` con manejo de fallo y estado `PENDIENTE_REVISION`.
-	- Descripción: Endpoint que recibe datos OCR/IA, crea transacción provisional y retorna 202 cuando debe revisarse.
-	- Criterios de aceptación:
-		- Valida la entrada OCR/IA y no genera 500s por datos incompletos.
-		- Crea transacciones en estado `PENDIENTE_REVISION` cuando no se puede confirmar automáticamente.
-		- Permite una ruta de corrección posterior sin duplicar la operación.
+- [ ] Registrar compras en cuotas y generar `Cuota` proyectadas.
+- [ ] Ingresar y consultar resúmenes de tarjeta.
+- [ ] Confirmar el pago de un resumen.
+- [ ] Evitar doble conteo entre consumos, cuotas y pago del resumen.
+- [ ] Mostrar deuda y próximos vencimientos en Home.
+- [ ] Agregar tests de reconciliación y doble conteo.
 
-- Implementar `POST /api/v1/transferencias`.
-	- Descripción: Servicio y endpoint para transferencias internas entre cuentas propias.
-	- Criterios de aceptación:
-		- Ajusta ambos saldos en una transacción DB atómica.
-		- Registra la transferencia y genera la transacción asociada con idempotencia.
+## Después del próximo slice
 
-- Implementar `POST /api/v1/transacciones/:id/categoria`.
-	- Descripción: Endpoint para reasignar la categoría de una transacción ya existente.
-	- Criterios de aceptación:
-		- Valida que la transacción existe y pertenece al usuario.
-		- Actualiza la categoría sin alterar la idempotencia original.
+- [ ] Integrar payload real del Atajo iOS/Apple Pay.
+- [ ] Matching automático de cuenta por `ultimosDigitos`.
+- [ ] Mejorar confianza y corrección del OCR con IA.
+- [ ] Soporte offline básico para captura manual.
+- [ ] Tests E2E de los flujos críticos.
+- [ ] CI con TypeScript, tests y formato/lint.
+- [ ] Reset controlado de `finnances_test` entre ejecuciones.
+- [ ] Documentar contratos API y flujos iOS/Share Sheet.
 
-- Avanzar en UI/UX de PWA: formulario y listado de movimientos.
-	- Descripción: Comenzar el frontend con el flujo de nuevo gasto y la vista de movimientos.
+## Fuera de alcance de la v1
 
-- Documentar el contrato de API y los flujos de balance.
-	- Descripción: Actualizar `docs/04-api-y-arquitectura-tecnica.md` con los endpoints actuales y el cálculo de `saldoInicial + movimientos`.
+- Multiusuario o multitenancy.
+- Open Banking o scraping bancario.
+- Motor de amortización variable de préstamos.
+- Cálculo avanzado de límites de tarjeta.

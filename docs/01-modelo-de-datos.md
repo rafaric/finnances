@@ -90,21 +90,29 @@ empiece a doler (YAGNI, ver principio 2.7).
 
 ## Categoria / Subcategoria
 
+Las categorías son registros gestionables, no un enum fijo. Cada categoría
+pertenece a `GASTO` o `INGRESO` y puede tener subcategorías opcionales.
+
 ```prisma
-enum Categoria {
-  COMIDA
-  TRANSPORTE
-  VIVIENDA
-  SERVICIOS
-  OCIO
-  DEUDAS      // cuotas, resúmenes, préstamos — ver 03-reglas-de-negocio para reglas de no-doble-conteo
-  OTROS
+model Categoria {
+  id            String         @id @default(cuid())
+  nombre        String
+  icono         IconoCategoria
+  color         ColorCategoria
+  tipo          TipoCategoria
+  activa        Boolean        @default(true)
+  subcategorias Subcategoria[]
+
+  @@unique([nombre, tipo])
 }
 
 model Subcategoria {
-  id         String    @id @default(cuid())
-  nombre     String    // "Salud", "Supermercado", "Farmacia"
-  categoria  Categoria
+  id          String    @id @default(cuid())
+  nombre      String
+  categoriaId String
+  categoria   Categoria @relation(fields: [categoriaId], references: [id])
+
+  @@unique([categoriaId, nombre])
 }
 ```
 
@@ -138,7 +146,8 @@ model Transaccion {
   origen                 OrigenTransaccion
   cuentaId               String
   cuenta                 Cuenta             @relation(fields: [cuentaId], references: [id])
-  categoria              Categoria
+  categoriaId            String
+  categoria              Categoria         @relation(fields: [categoriaId], references: [id])
   subcategoriaId         String?
   subcategoria           Subcategoria?      @relation(fields: [subcategoriaId], references: [id])
   fecha                  DateTime

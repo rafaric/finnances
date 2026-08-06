@@ -146,14 +146,15 @@ Queda fuera de la v1:
 - Documentación de endpoints
 - Tests unitarios e integración
 
-## 5. Recomendación de prioridades
+## 5. Estado y recomendación de prioridades
 
-1. Modelo de datos + dominio.
-2. Creación de transacciones + cálculo de saldo.
-3. API de gastos y OCR con fallback.
-4. UI del home, movimientos y nuevo gasto.
-5. Confirmaciones de pendientes y tarjetas.
-6. Pruebas y release.
+El modelo de datos, el saldo derivado, la captura manual, OCR con fallback,
+transferencias, categorías, movimientos y pruebas base ya están implementados.
+
+1. Recurrentes: proyecciones, confirmación y omisión.
+2. Tarjetas: compras en cuotas, resúmenes y reconciliación.
+3. QA: tests E2E, CI, lint/formato y reset de la base de test.
+4. Integraciones: Atajo iOS, matching de cuenta y offline básico.
 
 ## 6. Resultado esperado para v1
 

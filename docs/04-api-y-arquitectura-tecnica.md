@@ -7,6 +7,7 @@ aunque sí converjan en una única función de negocio.
 
 ```
 POST /api/v1/gastos                → Apple Pay + Manual (dato ya estructurado)
+POST /api/v1/ingresos              → ingreso manual categorizado
 POST /api/v1/gastos/ocr            → recibe texto crudo de Live Text, llama IA, estructura
 PATCH /api/v1/gastos/ocr/:id/corregir → corrige un gasto OCR pendiente y lo confirma si queda completo
 POST /api/v1/resumenes/ocr         → ingesta de resumen de tarjeta (texto de PDF/mail/captura)
@@ -14,6 +15,9 @@ POST /api/v1/transferencias        → movimiento entre cuentas propias
 POST /api/v1/recurrentes/:id/confirmar   → confirma InstanciaGastoRecurrente
 POST /api/v1/resumenes/:id/confirmar     → confirma pago de Resumen (propaga a Cuotas)
 POST /api/v1/transacciones/:id/categoria → resuelve PENDIENTE_CATEGORIA (transferencias a personas)
+GET /api/v1/transacciones          → movimientos combinados, filtros y paginación
+GET/POST/PATCH /api/v1/categorias  → gestión de categorías
+GET/POST/PATCH/DELETE /api/v1/subcategorias → gestión de subcategorías
 ```
 
 **Por qué separar `/gastos` y `/gastos/ocr` en vez de un único endpoint:**
@@ -68,7 +72,8 @@ requirement condicional:
 ```typescript
 const transaccionSchema = z.object({
   monto: z.number().positive(),
-  categoria: z.string(),
+  categoriaId: z.string(),
+  subcategoriaId: z.string().optional(),
   comercio: z.string().optional(),
   origen: z.enum(['APPLE_PAY', 'OCR_IA', 'MANUAL', 'RECURRENTE_CONFIRMADO', 'RESUMEN_CONFIRMADO']),
 }).refine(
@@ -116,7 +121,7 @@ la clasificación correcta de negocio.
   `estado: PENDIENTE_CATEGORIA`.
 - El cliente debe corregir la categoría mediante:
   `PATCH /api/v1/gastos/ocr/:id/corregir`.
-- Cuando la corrección aporta `categoria` válida, el backend actualiza el
+- Cuando la corrección aporta `categoriaId` válida, el backend actualiza el
   registro, confirma la transacción y ajusta el saldo de la cuenta.
 
 Esto permite separar el reconocimiento de texto del paso de clasificación, con un
