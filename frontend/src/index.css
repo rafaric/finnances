@@ -1160,6 +1160,16 @@ fieldset {
   background: #f9fcf9;
   box-shadow: 0 18px 50px rgba(20, 43, 33, 0.25);
 }
+.modal-backdrop .recurrente-form {
+  width: min(620px, 100%);
+  max-height: calc(100dvh - 28px);
+  overflow-y: auto;
+  margin: 0 auto;
+  padding: 20px;
+  border-radius: 22px;
+  background: #f9fcf9;
+  box-shadow: 0 18px 50px rgba(20, 43, 33, 0.25);
+}
 .account-picker-list {
   display: grid;
   gap: 8px;

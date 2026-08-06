@@ -87,8 +87,10 @@ export function Recurrentes({ token, accounts }: RecurrentesProps) {
   }
 
   return <section className="recurrentes-page">
-    <div className="section-heading"><div><p className="eyebrow">COMPROMISOS</p><h2>Gastos recurrentes</h2></div><button className="primary-action" type="button" onClick={() => setIsFormOpen((current) => !current)}>+ Nuevo</button></div>
-    {isFormOpen ? <div className="recurrente-form">
+    <div className="section-heading"><div><p className="eyebrow">COMPROMISOS</p><h2>Recurrentes</h2></div><button className="primary-action" type="button" onClick={() => setIsFormOpen(true)}>+ Nuevo</button></div>
+    {isFormOpen ? <div className="modal-backdrop" role="presentation">
+      <section className="recurrente-form" role="dialog" aria-modal="true" aria-labelledby="new-recurring-title">
+      <div className="section-heading"><h2 id="new-recurring-title">Nuevo gasto recurrente</h2><button className="icon-button" type="button" aria-label="Cerrar" onClick={() => setIsFormOpen(false)}>×</button></div>
       <label className="form-field"><span>Nombre</span><input value={name} onChange={(event) => setName(event.target.value)} placeholder="Alquiler, gimnasio..." /></label>
       <MoneyInput value={amount} onChange={setAmount} />
       <AccountPicker accounts={accounts} value={accountId} onChange={setAccountId} disabled={!accounts.length} />
@@ -96,6 +98,7 @@ export function Recurrentes({ token, accounts }: RecurrentesProps) {
       <CategorySelector token={token} tipo="GASTO" categoriaId={categoryId} subcategoriaId={subcategoryId} onCategoriaChange={setCategoryId} onSubcategoriaChange={setSubcategoryId} />
       <label className="form-field"><span>Nota <small>(opcional)</small></span><input maxLength={60} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="¿Qué gasto es?" /><small className="character-count">{notes.length}/60</small></label>
       <button className="primary-action" type="button" disabled={!name || !amount || !categoryId} onClick={() => void submit()}>Guardar recurrente</button>
+      </section>
     </div> : null}
     {isLoading ? <LoadingState label="Cargando recurrentes..." /> : error ? <ErrorState message={error} onRetry={() => void load()} /> : <>
       <div className="recurrente-list">{items.length ? items.map((item) => <article className="recurrente-card" key={item.id}><div><strong>{item.nombre}</strong><span>{item.categoria.nombre}{item.subcategoria ? ` · ${item.subcategoria.nombre}` : ""} · Día {item.diaDelMes}</span></div><b>{currency(item.montoFijo)}</b><button type="button" onClick={() => void generate(item)}>Generar instancia</button></article>) : <p className="empty-page">No hay gastos recurrentes creados.</p>}</div>

@@ -20,7 +20,7 @@ export function AccountPicker({ accounts, value, onChange, disabled }: AccountPi
       <select disabled={disabled} value={value} onChange={(event) => onChange(event.target.value)}>
         {accounts.map((item) => <option key={item.id} value={item.id}>{item.nombre} · {currency(item.saldoActual)}</option>)}
       </select>
-      <small>{account ? `Saldo disponible: ${currency(account.saldoActual)}` : "No hay cuentas configuradas"}</small>
+      <small>{account ? `Saldo: ${currency(account.saldoActual)}` : "No hay cuentas configuradas"}</small>
     </label>
   );
 }
