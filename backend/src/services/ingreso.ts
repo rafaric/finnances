@@ -9,6 +9,7 @@ const IngresoSchema = z.object({
   categoriaId: z.string().min(1),
   subcategoriaId: z.string().optional(),
   idempotencyKey: z.string().min(1),
+  confirmarDebitosAutomaticos: z.boolean().optional(),
 });
 
 export type CrearIngresoInput = z.infer<typeof IngresoSchema>;

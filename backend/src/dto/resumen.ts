@@ -1,4 +1,4 @@
-import type { EstadoResumen, Resumen } from "@prisma/client";
+import type { EstadoConciliacion, EstadoResumen, Resumen } from "@prisma/client";
 
 export interface ResumenResponseDTO {
   id: string;
@@ -10,7 +10,17 @@ export interface ResumenResponseDTO {
   montoPagado?: number;
   fechaPago?: string;
   saldoFinanciado: number;
+  entidadInformada?: string;
+  ultimosDigitosInformados?: string;
+  interesesInformados?: number;
+  impuestosInformados?: number;
+  comisionesInformadas?: number;
+  segurosInformados?: number;
+  confianzaOCR?: number;
+  diferenciaConciliacion?: number;
+  estadoConciliacion: EstadoConciliacion;
   estado: EstadoResumen;
+  consumosExtraidos?: unknown[];
 }
 
 export function toResumenDTO(
@@ -24,7 +34,9 @@ export function toResumenDTO(
     | "totalConsumosInformado"
     | "montoPagado"
     | "fechaPago"
-    | "saldoFinanciado"
+     | "saldoFinanciado" | "entidadInformada" | "ultimosDigitosInformados"
+     | "interesesInformados" | "impuestosInformados" | "comisionesInformadas"
+     | "segurosInformados" | "confianzaOCR" | "diferenciaConciliacion" | "estadoConciliacion" | "consumosExtraidos"
     | "estado"
   >,
 ): ResumenResponseDTO {
@@ -42,6 +54,16 @@ export function toResumenDTO(
       resumen.montoPagado != null ? Number(resumen.montoPagado) : undefined,
     fechaPago: resumen.fechaPago?.toISOString(),
     saldoFinanciado: Number(resumen.saldoFinanciado),
+    entidadInformada: resumen.entidadInformada ?? undefined,
+    ultimosDigitosInformados: resumen.ultimosDigitosInformados ?? undefined,
+    interesesInformados: resumen.interesesInformados != null ? Number(resumen.interesesInformados) : undefined,
+    impuestosInformados: resumen.impuestosInformados != null ? Number(resumen.impuestosInformados) : undefined,
+    comisionesInformadas: resumen.comisionesInformadas != null ? Number(resumen.comisionesInformadas) : undefined,
+    segurosInformados: resumen.segurosInformados != null ? Number(resumen.segurosInformados) : undefined,
+    confianzaOCR: resumen.confianzaOCR != null ? Number(resumen.confianzaOCR) : undefined,
+    diferenciaConciliacion: resumen.diferenciaConciliacion != null ? Number(resumen.diferenciaConciliacion) : undefined,
+    estadoConciliacion: resumen.estadoConciliacion,
+    consumosExtraidos: Array.isArray(resumen.consumosExtraidos) ? resumen.consumosExtraidos : undefined,
     estado: resumen.estado,
   };
 }

@@ -19,6 +19,7 @@ model Cuenta {
   saldoInicial          Decimal                @default(0)
   diaCierre             Int?
   diaPago               Int?
+  cuentaDebitoMinimoId  String?
   diasRecordatorio      Int?                   @default(3)
   limiteCompra          Decimal?
   limiteDisponible      Decimal?
@@ -32,6 +33,9 @@ model Cuenta {
   transacciones         Transaccion[]
   transferenciasDestino TransferenciaInterna[] @relation("TransferDestino")
   transferenciasOrigen  TransferenciaInterna[] @relation("TransferOrigen")
+  cuentaDebitoMinimo   Cuenta?                @relation("TarjetaDebitoMinimo", fields: [cuentaDebitoMinimoId], references: [id])
+  tarjetasDebitoMinimo Cuenta[]               @relation("TarjetaDebitoMinimo")
+  pagosResumen         PagoResumen[]           @relation("CuentaPagoResumen")
 }
 
 model Ingreso {
@@ -63,6 +67,7 @@ model Categoria {
   subcategorias      Subcategoria[]
   transacciones      Transaccion[]
   ingresos           Ingreso[]
+  compras            Compra[]
 
   @@unique([nombre, tipo])
 }
@@ -97,6 +102,7 @@ model Transaccion {
   esTransferenciaAPersona  Boolean                   @default(false)
   categoriaId              String
   cuota                    Cuota?                    @relation("TransaccionCuota")
+  cargoResumen             CargoResumen?
   instanciaGastoRecurrente InstanciaGastoRecurrente? @relation("TransaccionInstanciaRecurrente")
   categoria                Categoria                 @relation(fields: [categoriaId], references: [id])
   cuenta                   Cuenta?                   @relation(fields: [cuentaId], references: [id], onDelete: Restrict)
@@ -110,7 +116,9 @@ model Compra {
   fechaCompra    DateTime
   cantidadCuotas Int      @default(1)
   cuentaId       String
+  categoriaId    String?
   cuenta         Cuenta   @relation(fields: [cuentaId], references: [id])
+  categoria      Categoria? @relation(fields: [categoriaId], references: [id])
   cuotas         Cuota[]
 }
 
@@ -124,6 +132,9 @@ model Cuota {
   transaccionId   String?      @unique
   compra          Compra       @relation(fields: [compraId], references: [id])
   transaccion     Transaccion? @relation("TransaccionCuota", fields: [transaccionId], references: [id])
+
+  @@unique([compraId, numeroCuota])
+  @@index([fechaImputacion, estado])
 }
 
 model Resumen {
@@ -136,10 +147,53 @@ model Resumen {
   montoPagado            Decimal?
   fechaPago              DateTime?
   saldoFinanciado        Decimal              @default(0)
+  entidadInformada      String?
+  ultimosDigitosInformados String?
+  interesesInformados   Decimal?
+  impuestosInformados   Decimal?
+  comisionesInformadas  Decimal?
+  segurosInformados     Decimal?
+  confianzaOCR          Decimal?
+  diferenciaConciliacion Decimal?
+  estadoConciliacion    EstadoConciliacion   @default(PENDIENTE)
+  cargos                 CargoResumen[]
+  consumosExtraidos      Json?
   metodoPagoMinimo       MetodoPagoRecurrente @default(DEBITO_AUTOMATICO)
   estado                 EstadoResumen        @default(PENDIENTE)
   instancias             InstanciaResumen[]
+  pagos                  PagoResumen[]
   cuenta                 Cuenta               @relation(fields: [cuentaId], references: [id])
+
+  @@unique([cuentaId, periodo])
+}
+
+model CargoResumen {
+  id            String             @id @default(cuid())
+  resumenId     String
+  tipo          TipoCargoResumen
+  monto         Decimal            @db.Decimal(10, 2)
+  estado        EstadoCargoResumen @default(PENDIENTE)
+  transaccionId String?            @unique
+  resumen       Resumen            @relation(fields: [resumenId], references: [id])
+  transaccion   Transaccion?       @relation(fields: [transaccionId], references: [id])
+
+  @@unique([resumenId, tipo])
+}
+
+model PagoResumen {
+  id              String                @id @default(cuid())
+  resumenId       String
+  cuentaOrigenId  String
+  monto           Decimal               @db.Decimal(10, 2)
+  fecha           DateTime
+  tipo            TipoPagoResumen
+  transferenciaId String?               @unique
+  idempotencyKey  String                @unique
+  resumen         Resumen               @relation(fields: [resumenId], references: [id])
+  cuentaOrigen    Cuenta                @relation("CuentaPagoResumen", fields: [cuentaOrigenId], references: [id])
+  transferencia   TransferenciaInterna? @relation(fields: [transferenciaId], references: [id])
+
+  @@index([resumenId, fecha])
 }
 
 model InstanciaResumen {
@@ -203,6 +257,7 @@ model TransferenciaInterna {
   idempotencyKey  String   @unique
   cuentaDestino   Cuenta   @relation("TransferDestino", fields: [cuentaDestinoId], references: [id])
   cuentaOrigen    Cuenta   @relation("TransferOrigen", fields: [cuentaOrigenId], references: [id])
+  pagoResumen     PagoResumen?
 }
 
 model ContactoCategoria {
@@ -263,6 +318,7 @@ enum OrigenTransaccion {
   MANUAL
   RECURRENTE_CONFIRMADO
   RESUMEN_CONFIRMADO
+  CUOTA_CONFIRMADA
 }
 
 enum EstadoTransaccion {
@@ -281,6 +337,34 @@ enum EstadoResumen {
   PENDIENTE
   PAGADO_TOTAL
   PAGADO_PARCIAL
+}
+
+enum TipoPagoResumen {
+  DEBITO_AUTOMATICO
+  MANUAL
+}
+
+enum EstadoConciliacion {
+  PENDIENTE
+  COINCIDE
+  CON_DIFERENCIA
+}
+
+enum TipoCargoResumen {
+  INTERESES
+  IMPUESTOS
+  COMISIONES
+  SEGUROS
+  IVA_INTERESES
+  IVA_COMISIONES
+  IVA_IMPUESTOS
+  IMPUESTO_SELLO
+}
+
+enum EstadoCargoResumen {
+  PENDIENTE
+  CONFIRMADO
+  OMITIDO
 }
 
 enum TipoMonto {

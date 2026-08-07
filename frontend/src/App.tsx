@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { actualizarCuenta, crearCuenta, crearGasto, crearIngreso, crearTransferencia, getResumenMensual, listCuentas, listPendientes } from "./api/client";
+import { actualizarCuenta, crearCompra, crearCuenta, crearGasto, crearIngreso, crearTransferencia, getResumenMensual, listCuentas, listPendientes } from "./api/client";
 import type { CuentaResponseDTO, ResumenMensualDTO, TipoCuenta, TransaccionResponseDTO } from "./api/types";
 import { CategorySelector } from "./components/CategorySelector";
 import { AccountPicker } from "./components/AccountPicker";
@@ -9,10 +9,11 @@ import { Movimientos } from "./features/movimientos/Movimientos";
 import { Analisis } from "./features/analisis/Analisis";
 import { Categorias } from "./features/categorias/Categorias";
 import { Recurrentes } from "./features/recurrentes/Recurrentes";
+import { Tarjetas } from "./features/tarjetas/Tarjetas";
 import { currentPeriod } from "./lib/periods";
 import { Bolt, X } from "lucide-react";
 import "./index.css";
-type Screen = "inicio" | "movimientos" | "nuevo" | "transferir" | "analisis" | "categorias" | "recurrentes";
+type Screen = "inicio" | "movimientos" | "nuevo" | "transferir" | "analisis" | "categorias" | "recurrentes" | "tarjetas";
 
 interface Connection {
   token: string;
@@ -62,12 +63,14 @@ function App() {
   const [isCreatingAccount, setIsCreatingAccount] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [amount, setAmount] = useState("");
+  const [installments, setInstallments] = useState("1");
   const [transactionType, setTransactionType] = useState<"GASTO" | "INGRESO">("GASTO");
   const [categoriaId, setCategoriaId] = useState<string>();
   const [subcategoriaId, setSubcategoriaId] = useState<string>();
   const [date, setDate] = useState(() => dateValue());
   const [note, setNote] = useState("");
   const [incomePeriod, setIncomePeriod] = useState(() => currentPeriod());
+  const [confirmAutomaticDebits, setConfirmAutomaticDebits] = useState(false);
   const [transferOriginId, setTransferOriginId] = useState("");
   const [transferDestinationId, setTransferDestinationId] = useState("");
   const [transferAmount, setTransferAmount] = useState("");
@@ -252,6 +255,7 @@ function App() {
           categoriaId: categoriaId!,
           subcategoriaId,
           idempotencyKey: crypto.randomUUID(),
+          confirmarDebitosAutomaticos: confirmAutomaticDebits,
         });
         setAccounts((current) => current.map((account) => account.id === income.cuenta.id ? { ...account, saldoActual: income.cuenta.saldoActual } : account));
         setMonthlySummary(undefined);
@@ -259,7 +263,29 @@ function App() {
         setAmount("");
         setCategoriaId(undefined);
         setSubcategoriaId(undefined);
+        setConfirmAutomaticDebits(false);
         setNotice(`Ingreso registrado. Saldo actual: ${currency(income.cuenta.saldoActual)}.`);
+        setScreen("inicio");
+        return;
+      }
+      const selectedAccount = accounts.find((account) => account.id === selectedAccountId);
+      if (selectedAccount?.tipo === "TARJETA_CREDITO") {
+        if (!categoriaId || !note.trim()) {
+          setNotice("Ingresá comercio y seleccioná una categoría para la compra con tarjeta.");
+          return;
+        }
+        await crearCompra(connection.token, {
+          montoTotal: amount,
+          comercio: note.trim(),
+          fechaCompra: date,
+          cantidadCuotas: Number(installments),
+          cuentaId: selectedAccountId,
+          categoriaId,
+        });
+        setAmount("");
+        setNote("");
+        setInstallments("1");
+        setNotice("Compra con tarjeta registrada y cuotas proyectadas.");
         setScreen("inicio");
         return;
       }
@@ -342,7 +368,7 @@ function App() {
   return (
     <main className="app-shell">
       <header className={screen === "inicio" ? "topbar home-topbar" : "topbar compact-topbar"}>
-         {screen === "inicio" ? <div><p className="eyebrow">FINNANCES</p><h1>Tu plata, en contexto.</h1></div> : <h1>{screen === "nuevo" ? "Nueva transacción" : screen === "transferir" ? "Transferir" : screen === "movimientos" ? "Movimientos" : screen === "analisis" ? "Análisis" : screen === "recurrentes" ? "Gastos recurrentes" : "Categorías"}</h1>}
+         {screen === "inicio" ? <div><p className="eyebrow">FINNANCES</p><h1>Tu plata, en contexto.</h1></div> : <h1>{screen === "nuevo" ? "Nueva transacción" : screen === "transferir" ? "Transferir" : screen === "movimientos" ? "Movimientos" : screen === "analisis" ? "Análisis" : screen === "recurrentes" ? "Gastos recurrentes" : screen === "tarjetas" ? "Tarjetas y resúmenes" : "Categorías"}</h1>}
         <button className="settings-button icon-button" type="button" aria-label="Configuración de conexión" title="Configuración de conexión" onClick={() => setIsConfigOpen(true)}><Bolt size={19} strokeWidth={2.2} /></button>
       </header>
 
@@ -361,6 +387,7 @@ function App() {
           onRegisterExpense={() => { setTransactionType("GASTO"); setCategoriaId(undefined); setSubcategoriaId(undefined); setScreen("nuevo"); }}
            onRegisterIncome={() => { setTransactionType("INGRESO"); setScreen("nuevo"); }}
            onRecurrentes={() => setScreen("recurrentes")}
+           onTarjetas={() => setScreen("tarjetas")}
           onTransfer={() => {
             setTransferOriginId(accounts[0]?.id ?? "");
             setTransferDestinationId(accounts[1]?.id ?? "");
@@ -426,16 +453,17 @@ function App() {
             <AccountPicker accounts={accounts} value={selectedAccountId} onChange={setSelectedAccountId} disabled={!accounts.length} />
 
             <CategorySelector token={connection.token} tipo={transactionType} categoriaId={categoriaId} subcategoriaId={subcategoriaId} onCategoriaChange={setCategoriaId} onSubcategoriaChange={setSubcategoriaId} />
-            {transactionType === "INGRESO" ? <label className="form-field"><span>Disponible en</span><input type="month" value={incomePeriod} onChange={(event) => setIncomePeriod(event.target.value)} /></label> : null}
+             {transactionType === "INGRESO" ? <><label className="form-field"><span>Disponible en</span><input type="month" value={incomePeriod} onChange={(event) => setIncomePeriod(event.target.value)} /></label>{accounts.find((account) => account.id === selectedAccountId)?.tipo !== "TARJETA_CREDITO" ? <label className="remember-connection"><input type="checkbox" checked={confirmAutomaticDebits} onChange={(event) => setConfirmAutomaticDebits(event.target.checked)} /><span>Confirmar débitos automáticos de tarjetas</span></label> : null}</> : null}
 
-          {transactionType === "GASTO" ? <label className="form-field">
-            <span>Nota <small>(opcional)</small></span>
-            <input type="text" maxLength={60} value={note} onChange={(event) => setNote(event.target.value)} placeholder="¿En qué fue?" />
-            <small className="character-count">{note.length}/60</small>
-          </label> : null}
+            {transactionType === "GASTO" ? <label className="form-field">
+             <span>{accounts.find((account) => account.id === selectedAccountId)?.tipo === "TARJETA_CREDITO" ? "Comercio" : "Nota"} <small>{accounts.find((account) => account.id === selectedAccountId)?.tipo === "TARJETA_CREDITO" ? "(obligatorio)" : "(opcional)"}</small></span>
+             <input required={accounts.find((account) => account.id === selectedAccountId)?.tipo === "TARJETA_CREDITO"} type="text" maxLength={60} value={note} onChange={(event) => setNote(event.target.value)} placeholder={accounts.find((account) => account.id === selectedAccountId)?.tipo === "TARJETA_CREDITO" ? "Nombre del comercio" : "¿En qué fue?"} />
+             <small className="character-count">{note.length}/60</small>
+           </label> : null}
+           {transactionType === "GASTO" && accounts.find((account) => account.id === selectedAccountId)?.tipo === "TARJETA_CREDITO" ? <label className="form-field"><span>Cantidad de cuotas</span><input required type="number" min="1" max="120" value={installments} onChange={(event) => setInstallments(event.target.value)} /></label> : null}
 
            <button className="primary-action" disabled={isSaving || accounts.length === 0} type="submit">
-             {isSaving ? "Registrando..." : transactionType === "INGRESO" ? "Registrar ingreso" : "Registrar gasto"}
+              {isSaving ? "Registrando..." : transactionType === "INGRESO" ? "Registrar ingreso" : accounts.find((account) => account.id === selectedAccountId)?.tipo === "TARJETA_CREDITO" ? "Registrar compra" : "Registrar gasto"}
            </button>
         </form>
       ) : null}
@@ -446,6 +474,7 @@ function App() {
 
       {screen === "categorias" ? <Categorias token={connection.token} /> : null}
       {screen === "recurrentes" ? <Recurrentes token={connection.token} accounts={accounts} /> : null}
+      {screen === "tarjetas" ? <Tarjetas token={connection.token} accounts={accounts} /> : null}
 
       <nav className="bottom-nav" aria-label="Navegación principal">
         <button className={screen === "inicio" ? "active" : ""} type="button" onClick={() => setScreen("inicio")}>Inicio</button>

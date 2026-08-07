@@ -1,0 +1,10 @@
+ALTER TABLE "Resumen" ADD COLUMN "entidadInformada" TEXT;
+ALTER TABLE "Resumen" ADD COLUMN "ultimosDigitosInformados" TEXT;
+ALTER TABLE "Resumen" ADD COLUMN "interesesInformados" DECIMAL(10,2);
+ALTER TABLE "Resumen" ADD COLUMN "impuestosInformados" DECIMAL(10,2);
+ALTER TABLE "Resumen" ADD COLUMN "comisionesInformadas" DECIMAL(10,2);
+ALTER TABLE "Resumen" ADD COLUMN "segurosInformados" DECIMAL(10,2);
+ALTER TABLE "Resumen" ADD COLUMN "confianzaOCR" DECIMAL(5,4);
+ALTER TABLE "Resumen" ADD COLUMN "diferenciaConciliacion" DECIMAL(10,2);
+CREATE TYPE "EstadoConciliacion" AS ENUM ('PENDIENTE', 'COINCIDE', 'CON_DIFERENCIA');
+ALTER TABLE "Resumen" ADD COLUMN "estadoConciliacion" "EstadoConciliacion" NOT NULL DEFAULT 'PENDIENTE';

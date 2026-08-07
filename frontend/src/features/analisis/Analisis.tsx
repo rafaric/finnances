@@ -70,8 +70,8 @@ export function Analisis({ token, initialPeriod }: AnalisisProps) {
             {summary.gastosPorCategoria.length ? (
               <div className="category-breakdown">
                 {summary.gastosPorCategoria.map((item) => (
-                  <div className="category-breakdown-row" key={item.categoria}>
-                    <div className="category-breakdown-label"><strong>{item.categoria}</strong><span>{item.porcentaje.toFixed(2)}%</span></div>
+                  <div className="category-breakdown-row" key={item.categoria.id}>
+                    <div className="category-breakdown-label"><strong>{item.categoria.nombre}</strong><span>{item.porcentaje.toFixed(2)}%</span></div>
                     <div className="category-bar"><span style={{ width: `${Math.min(item.porcentaje, 100)}%` }} /></div>
                     <strong>{currency(item.monto)}</strong>
                   </div>

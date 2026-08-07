@@ -1,5 +1,6 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import multipart from "@fastify/multipart";
 import { PrismaClient, OrigenTransaccion, EstadoTransaccion, type Cuenta, type Transaccion } from "@prisma/client";
 import { z, ZodError } from "zod";
 import { toCuentaResumenDTO, toCuentaDTO } from "./dto/cuenta";
@@ -8,6 +9,7 @@ import { toResumenMensualDTO } from "./dto/resumenMensual";
 import { toTransferenciaDTO } from "./dto/transferencia";
 import { toTransaccionDTO } from "./dto/transaccion";
 import { toCategoriaDTO, toSubcategoriaDTO } from "./dto/categoria";
+import { toCompraDTO, toCuotaDTO } from "./dto/compra";
 import { unauthorized, fromZodError, fromDomainError, internalError } from "./dto/error";
 import { toPaginatedDTO } from "./dto/paginated";
 import {
@@ -32,6 +34,14 @@ import {
   omitirInstanciaRecurrente,
   proyectarInstanciasDelPeriodo,
 } from "./services/recurrente";
+import { crearCompra, eliminarCompra, listarCompras, listarCuotas } from "./services/compra";
+import { renderProtectedPdf } from "./services/procesarResumenPdf";
+import { analizarResumenConGemini } from "./services/geminiResumen";
+import { crearResumenDesdeGemini, listarResumens, reconciliarResumen } from "./services/resumen";
+import { listarCargosResumen, resolverCargoResumen } from "./services/cargoResumen";
+import { registrarPagoResumen } from "./services/pagoResumen";
+import { registrarDebitosAutomaticos } from "./services/pagoResumen";
+import { toCargoResumenDTO } from "./dto/cargoResumen";
 
 function normalizeEntity(value: string): string {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
@@ -71,6 +81,11 @@ export function buildApp(prisma: PrismaClient) {
     methods: ["GET", "POST", "PATCH", "PUT", "DELETE"],
   });
 
+  app.register(multipart, {
+    limits: { files: 1, fileSize: 15 * 1024 * 1024 },
+    throwFileSizeLimit: true,
+  });
+
   const API_TOKEN = process.env.API_TOKEN;
   if (!API_TOKEN) throw new Error("API_TOKEN env var is required");
 
@@ -80,13 +95,127 @@ export function buildApp(prisma: PrismaClient) {
     if (auth !== `Bearer ${API_TOKEN}`) return unauthorized(reply);
   });
 
-  app.setErrorHandler((_error, _request, reply) => internalError(reply));
+  app.setErrorHandler((error, request, reply) => {
+    request.log.error({ err: error, route: request.url }, "Unhandled request error");
+    return internalError(reply);
+  });
 
   app.get("/health", async () => ({ status: "ok" }));
 
+  app.post("/api/v1/resumenes/pdf/render", async (request, reply) => {
+    try {
+      const file = await request.file();
+      if (!file) return reply.code(400).send({ code: "BAD_REQUEST", message: "Se requiere un archivo PDF" });
+      if (file.mimetype !== "application/pdf") {
+        return reply.code(400).send({ code: "BAD_REQUEST", message: "El archivo debe ser un PDF" });
+      }
+
+      const rendered = await renderProtectedPdf(await file.toBuffer());
+      return reply.send({
+        pageCount: rendered.pages.length,
+        pages: rendered.pages.map((page) => ({ pageNumber: page.pageNumber, mimeType: page.mimeType })),
+      });
+    } catch (error) {
+      if (error instanceof Error) console.error("Resumen PDF render failed:", error.message);
+      if (error instanceof Error && error.message.includes("FST_REQ_FILE_TOO_LARGE")) {
+        return reply.code(400).send({ code: "BAD_REQUEST", message: "El archivo PDF supera el límite de 15 MB" });
+      }
+      if (error instanceof Error) return fromDomainError(reply, error);
+      return internalError(reply);
+    }
+  });
+
+  app.post("/api/v1/resumenes/pdf/analizar", async (request, reply) => {
+    try {
+      let cuentaId = "";
+      let pdfBuffer: Buffer | undefined;
+      let mimeType = "";
+      for await (const part of request.parts()) {
+        if (part.type === "field" && part.fieldname === "cuentaId") cuentaId = String(part.value);
+        if (part.type === "file" && part.fieldname === "file") {
+          mimeType = part.mimetype;
+          pdfBuffer = await part.toBuffer();
+        }
+      }
+      if (!pdfBuffer) return reply.code(400).send({ code: "BAD_REQUEST", message: "Se requiere un archivo PDF" });
+      if (mimeType !== "application/pdf") return reply.code(400).send({ code: "BAD_REQUEST", message: "El archivo debe ser un PDF" });
+      if (!cuentaId) return reply.code(400).send({ code: "BAD_REQUEST", message: "Se requiere cuentaId" });
+      const rendered = await renderProtectedPdf(pdfBuffer);
+      const extracted = await analizarResumenConGemini(rendered);
+      const resumen = await crearResumenDesdeGemini(prisma, cuentaId, extracted);
+      return reply.code(201).send({ resumen: toResumenDTO(resumen), requiereRevision: true });
+    } catch (error) {
+      if (error instanceof Error) console.error("Resumen PDF analysis failed:", error.message);
+      if (error instanceof Error && error.message.includes("FST_REQ_FILE_TOO_LARGE")) {
+        return reply.code(400).send({ code: "BAD_REQUEST", message: "El archivo PDF supera el límite de 15 MB" });
+      }
+      if (error instanceof Error) return fromDomainError(reply, error);
+      return internalError(reply);
+    }
+  });
+
+  app.get("/api/v1/resumenes/:resumenId/cargos", async (request, reply) => {
+    try {
+      const params = z.object({ resumenId: z.string() }).parse(request.params);
+      return reply.send((await listarCargosResumen(prisma, params.resumenId)).map(toCargoResumenDTO));
+    } catch (error) {
+      if (error instanceof ZodError) return fromZodError(reply, error);
+      return internalError(reply);
+    }
+  });
+
+  app.post("/api/v1/resumenes/:resumenId/reconciliar", async (request, reply) => {
+    try {
+      const params = z.object({ resumenId: z.string() }).parse(request.params);
+      return reply.send(toResumenDTO(await reconciliarResumen(prisma, params.resumenId)));
+    } catch (error) {
+      if (error instanceof ZodError) return fromZodError(reply, error);
+      if (error instanceof Error) return fromDomainError(reply, error);
+      return internalError(reply);
+    }
+  });
+
+  app.get("/api/v1/resumenes", async (request, reply) => {
+    try {
+      const query = z.object({ cuentaId: z.string().optional() }).parse(request.query);
+      return reply.send((await listarResumens(prisma, query.cuentaId)).map(toResumenDTO));
+    } catch (error) {
+      if (error instanceof ZodError) return fromZodError(reply, error);
+      return internalError(reply);
+    }
+  });
+
+  app.patch("/api/v1/cargos-resumen/:cargoId", async (request, reply) => {
+    try {
+      const params = z.object({ cargoId: z.string() }).parse(request.params);
+      const cargo = await resolverCargoResumen(prisma, params.cargoId, request.body as never);
+      return reply.send(toCargoResumenDTO(cargo));
+    } catch (error) {
+      if (error instanceof ZodError) return fromZodError(reply, error);
+      if (error instanceof Error) return fromDomainError(reply, error);
+      return internalError(reply);
+    }
+  });
+
+  app.post("/api/v1/resumenes/:resumenId/pagos", async (request, reply) => {
+    try {
+      const params = z.object({ resumenId: z.string() }).parse(request.params);
+      const pago = await registrarPagoResumen(prisma, params.resumenId, request.body as never);
+      return reply.code(201).send(pago);
+    } catch (error) {
+      if (error instanceof ZodError) return fromZodError(reply, error);
+      if (error instanceof Error) return fromDomainError(reply, error);
+      return internalError(reply);
+    }
+  });
+
   app.post("/api/v1/ingresos", async (request, reply) => {
     try {
+      const input = request.body as { confirmarDebitosAutomaticos?: boolean; cuentaId?: string; fechaCobro?: string; idempotencyKey?: string };
       const ingreso = await crearIngreso(prisma, request.body as never);
+      if (input.confirmarDebitosAutomaticos && input.cuentaId && input.fechaCobro && input.idempotencyKey) {
+        await registrarDebitosAutomaticos(prisma, input.cuentaId, input.fechaCobro, input.idempotencyKey);
+      }
       const [cuenta, categoria] = await Promise.all([
         toCuentaResumen(ingreso.cuentaId),
         prisma.categoria.findUnique({ where: { id: ingreso.categoriaId } }),
@@ -382,6 +511,65 @@ export function buildApp(prisma: PrismaClient) {
         toCuentaResumen(resultado.cuentaDestinoId),
       ]);
       return reply.code(201).send(toTransferenciaDTO({ transferencia: resultado, cuentaOrigen, cuentaDestino }));
+    } catch (error) {
+      if (error instanceof ZodError) return fromZodError(reply, error);
+      if (error instanceof Error) return fromDomainError(reply, error);
+      return internalError(reply);
+    }
+  });
+
+  const CompraSchema = z.object({
+    montoTotal: z.string().or(z.number()),
+    comercio: z.string(),
+    fechaCompra: z.string(),
+    cantidadCuotas: z.number().int().min(1).max(120).optional(),
+    cuentaId: z.string(),
+  });
+
+  const CompraQuerySchema = z.object({
+    cuentaId: z.string().optional(),
+    periodo: z.string().regex(/^\d{4}-\d{2}$/).optional(),
+  });
+
+  app.post("/api/v1/compras", async (request, reply) => {
+    try {
+      const data = CompraSchema.parse(request.body);
+      const resultado = await crearCompra(prisma, { ...data, cantidadCuotas: data.cantidadCuotas ?? 1 });
+      return reply.code(201).send(toCompraDTO(resultado));
+    } catch (error) {
+      if (error instanceof ZodError) return fromZodError(reply, error);
+      if (error instanceof Error) return fromDomainError(reply, error);
+      return internalError(reply);
+    }
+  });
+
+  app.get("/api/v1/compras", async (request, reply) => {
+    try {
+      const query = CompraQuerySchema.parse(request.query);
+      const compras = await listarCompras(prisma, query);
+      return reply.send(compras.map(toCompraDTO));
+    } catch (error) {
+      if (error instanceof ZodError) return fromZodError(reply, error);
+      return internalError(reply);
+    }
+  });
+
+  app.get("/api/v1/cuotas", async (request, reply) => {
+    try {
+      const query = CompraQuerySchema.parse(request.query);
+      const cuotas = await listarCuotas(prisma, query);
+      return reply.send(cuotas.map(toCuotaDTO));
+    } catch (error) {
+      if (error instanceof ZodError) return fromZodError(reply, error);
+      return internalError(reply);
+    }
+  });
+
+  app.delete("/api/v1/compras/:compraId", async (request, reply) => {
+    try {
+      const params = z.object({ compraId: z.string() }).parse(request.params);
+      await eliminarCompra(prisma, params.compraId);
+      return reply.code(204).send();
     } catch (error) {
       if (error instanceof ZodError) return fromZodError(reply, error);
       if (error instanceof Error) return fromDomainError(reply, error);

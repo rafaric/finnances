@@ -24,6 +24,8 @@ export interface ResumenMensualData {
   gastosPorCategoria: GastoCategoriaData[];
   disponibleLiquido: number;
   deudaTarjetas: number;
+  gastosProyectados: number;
+  gastosProyectadosPorCategoria: GastoCategoriaData[];
 }
 
 export async function calcularResumenMensual(
@@ -34,7 +36,7 @@ export async function calcularResumenMensual(
   const end = new Date(start);
   end.setUTCMonth(end.getUTCMonth() + 1);
 
-  const [transacciones, ingresos, cuentas] = await Promise.all([
+  const [transacciones, ingresos, cuentas, cuotasProyectadas] = await Promise.all([
     prisma.transaccion.findMany({
       where: {
         estado: EstadoTransaccion.CONFIRMADA,
@@ -46,6 +48,10 @@ export async function calcularResumenMensual(
       where: { periodoDisponible: periodo },
     }),
     prisma.cuenta.findMany(),
+    prisma.cuota.findMany({
+      where: { fechaImputacion: { gte: start, lt: end }, estado: "PROYECTADO" },
+      include: { compra: { include: { categoria: true } } },
+    }),
   ]);
 
   // gastos: transacciones con monto negativo (excluye transferencias — no hay Transaccion para ellas)
@@ -87,6 +93,19 @@ export async function calcularResumenMensual(
     }))
     .sort((a, b) => b.monto - a.monto);
 
+  const proyectadosTotal = cuotasProyectadas.reduce((sum, cuota) => sum + Number(cuota.monto), 0);
+  const proyectadosPorCategoriaMap = new Map<string, { categoria: CategoriaConNombre; monto: number }>();
+  for (const cuota of cuotasProyectadas) {
+    const categoria = cuota.compra.categoria;
+    if (!categoria) continue;
+    const current = proyectadosPorCategoriaMap.get(categoria.id);
+    if (current) current.monto += Number(cuota.monto);
+    else {
+      proyectadosPorCategoriaMap.set(categoria.id, { categoria: { id: categoria.id, nombre: categoria.nombre, icono: categoria.icono, color: categoria.color, tipo: categoria.tipo }, monto: Number(cuota.monto) });
+    }
+  }
+  const gastosProyectadosPorCategoria = Array.from(proyectadosPorCategoriaMap.values()).map(({ categoria, monto }) => ({ categoria, monto: Number(monto.toFixed(2)), porcentaje: proyectadosTotal > 0 ? Number(((monto / proyectadosTotal) * 100).toFixed(2)) : 0 })).sort((a, b) => b.monto - a.monto);
+
   // saldos por tipo de cuenta
   const saldos = await Promise.all(
     cuentas.map(async (c) => ({ tipo: c.tipo, saldo: await calcularSaldo(prisma, c.id) })),
@@ -114,5 +133,7 @@ export async function calcularResumenMensual(
     gastosPorCategoria,
     disponibleLiquido: Number(disponibleLiquido.toFixed(2)),
     deudaTarjetas: Number(deudaTarjetas.toFixed(2)),
+    gastosProyectados: Number(proyectadosTotal.toFixed(2)),
+    gastosProyectadosPorCategoria,
   };
 }

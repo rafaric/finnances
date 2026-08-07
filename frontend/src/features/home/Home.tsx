@@ -22,6 +22,7 @@ interface HomeProps {
   onRecurrentes: () => void;
   onTransfer: () => void;
   onManageAccounts: () => void;
+  onTarjetas: () => void;
   onPeriodChange: (periodo: string) => void;
   periodo: string;
   token: string;
@@ -51,6 +52,7 @@ export function Home({
   onRecurrentes,
   onTransfer,
   onManageAccounts,
+  onTarjetas,
   onPeriodChange,
   periodo,
   token,
@@ -105,6 +107,11 @@ export function Home({
           <strong>{isLoadingSummary ? "Cargando..." : summaryError ? "No disponible" : summary ? currency(summary.gastos) : "Sin datos"}</strong>
           <p>Solo transacciones confirmadas</p>
         </article>
+        <article>
+          <span>Gastos proyectados</span>
+          <strong>{isLoadingSummary ? "Cargando..." : summaryError ? "No disponible" : summary ? currency(summary.gastosProyectados ?? 0) : "Sin datos"}</strong>
+          <p>Cuotas con vencimiento en el período</p>
+        </article>
       </div>
       {summaryError ? <ErrorState message={summaryError} onRetry={onRetrySummary} /> : null}
 
@@ -124,7 +131,8 @@ export function Home({
       <div className="actions-grid">
         <button type="button" onClick={onRegisterExpense}>Registrar gasto</button>
         <button type="button" onClick={onRegisterIncome}>Registrar ingreso</button>
-        <button type="button" onClick={onRecurrentes}>Gastos recurrentes</button>
+       <button type="button" onClick={onRecurrentes}>Gastos recurrentes</button>
+        <button type="button" onClick={onTarjetas}>Tarjetas y resúmenes</button>
       </div>
 
       <section className={isAccountsExpanded ? "accounts-widget expanded" : "accounts-widget"}>

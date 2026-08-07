@@ -19,6 +19,10 @@ import type {
   CrearRecurrenteInput,
   GastoRecurrenteResponseDTO,
   InstanciaRecurrenteResponseDTO,
+  CargoResumenResponseDTO,
+  ResumenResponseDTO,
+  CrearCompraInput,
+  CompraResponseDTO,
 } from "./types";
 
 export class ApiRequestError extends Error {
@@ -147,6 +151,54 @@ export function getResumenMensual(
     token,
     `/api/v1/resumen-mensual?periodo=${encodeURIComponent(periodo)}`,
   );
+}
+
+export async function analizarResumenPdf(token: string, cuentaId: string, file: File): Promise<{ resumen: ResumenResponseDTO; requiereRevision: boolean }> {
+  const body = new FormData();
+  body.append("cuentaId", cuentaId);
+  body.append("file", file);
+  const response = await fetch(`${getApiUrl()}/api/v1/resumenes/pdf/analizar`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body,
+  });
+  if (!response.ok) {
+    const error = (await response.json()) as ApiError;
+    throw new ApiRequestError(error, response.status);
+  }
+  return (await response.json()) as { resumen: ResumenResponseDTO; requiereRevision: boolean };
+}
+
+export function listCargosResumen(token: string, resumenId: string): Promise<CargoResumenResponseDTO[]> {
+  return request<CargoResumenResponseDTO[]>(token, `/api/v1/resumenes/${encodeURIComponent(resumenId)}/cargos`);
+}
+
+export function resolverCargoResumen(token: string, cargoId: string, estado: "CONFIRMADO" | "OMITIDO"): Promise<CargoResumenResponseDTO> {
+  return request<CargoResumenResponseDTO>(token, `/api/v1/cargos-resumen/${encodeURIComponent(cargoId)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ estado }),
+  });
+}
+
+export function crearCompra(token: string, input: CrearCompraInput): Promise<CompraResponseDTO> {
+  return request<CompraResponseDTO>(token, "/api/v1/compras", { method: "POST", body: JSON.stringify(input) });
+}
+
+export async function eliminarCompra(token: string, compraId: string): Promise<void> {
+  await request<unknown>(token, `/api/v1/compras/${encodeURIComponent(compraId)}`, { method: "DELETE" });
+}
+
+export function listCompras(token: string, cuentaId: string): Promise<CompraResponseDTO[]> {
+  return request<CompraResponseDTO[]>(token, `/api/v1/compras?cuentaId=${encodeURIComponent(cuentaId)}`);
+}
+
+export function reconciliarResumen(token: string, resumenId: string): Promise<ResumenResponseDTO> {
+  return request<ResumenResponseDTO>(token, `/api/v1/resumenes/${encodeURIComponent(resumenId)}/reconciliar`, { method: "POST" });
+}
+
+export function listResumens(token: string, cuentaId?: string): Promise<ResumenResponseDTO[]> {
+  const query = cuentaId ? `?cuentaId=${encodeURIComponent(cuentaId)}` : "";
+  return request<ResumenResponseDTO[]>(token, `/api/v1/resumenes${query}`);
 }
 
 export function listCategorias(

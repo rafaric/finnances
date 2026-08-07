@@ -1,0 +1,1 @@
+ALTER TYPE "OrigenTransaccion" ADD VALUE 'CUOTA_CONFIRMADA';

@@ -84,6 +84,7 @@ export interface CrearIngresoInput {
   categoriaId: string;
   subcategoriaId?: string;
   idempotencyKey: string;
+  confirmarDebitosAutomaticos?: boolean;
 }
 
 export type FrecuenciaRecurrente = "MENSUAL";
@@ -182,7 +183,75 @@ export interface ResumenMensualDTO {
   gastosPorCategoria: GastoCategoriaDTO[];
   disponibleLiquido: number;
   deudaTarjetas: number;
+  gastosProyectados?: number;
+  gastosProyectadosPorCategoria?: GastoCategoriaDTO[];
 }
+
+export type EstadoConciliacion = "PENDIENTE" | "COINCIDE" | "CON_DIFERENCIA";
+export type TipoCargoResumen = "INTERESES" | "IMPUESTOS" | "COMISIONES" | "SEGUROS" | "IVA_INTERESES" | "IVA_COMISIONES" | "IVA_IMPUESTOS" | "IMPUESTO_SELLO";
+export type EstadoCargoResumen = "PENDIENTE" | "CONFIRMADO" | "OMITIDO";
+
+export interface ResumenResponseDTO {
+  id: string;
+  cuentaId: string;
+  periodo: string;
+  montoTotalInformado: number;
+  montoMinimoInformado: number;
+  totalConsumosInformado?: number;
+  saldoFinanciado: number;
+  entidadInformada?: string;
+  ultimosDigitosInformados?: string;
+  interesesInformados?: number;
+  impuestosInformados?: number;
+  comisionesInformadas?: number;
+  segurosInformados?: number;
+  confianzaOCR?: number;
+  diferenciaConciliacion?: number;
+  estadoConciliacion: EstadoConciliacion;
+  estado: string;
+  consumosExtraidos?: ConsumoExtraidoDTO[];
+}
+
+export interface ConsumoExtraidoDTO {
+  fecha: string | null;
+  comercio: string | null;
+  monto: number;
+  cuotaActual: number | null;
+  cuotasTotales: number | null;
+  estado?: "COINCIDE" | "SIN_REGISTRAR";
+  cuotaId?: string;
+  compraId?: string;
+}
+
+export interface CargoResumenResponseDTO {
+  id: string;
+  resumenId: string;
+  tipo: TipoCargoResumen;
+  monto: number;
+  estado: EstadoCargoResumen;
+  transaccionId?: string;
+}
+
+export interface CrearCompraInput {
+  montoTotal: string;
+  comercio: string;
+  fechaCompra: string;
+  cantidadCuotas: number;
+  cuentaId: string;
+  categoriaId: string;
+}
+
+export interface CompraResponseDTO {
+  id: string;
+  montoTotal: number;
+  comercio: string;
+  fechaCompra: string;
+  cantidadCuotas: number;
+  cuentaId: string;
+  cuotas: CuotaResponseDTO[];
+}
+
+export interface CuotaResponseDTO { id: string; numeroCuota: number; monto: number; fechaImputacion: string; estado: string; }
 
 export interface CrearCuentaInput {
   nombre: string;
@@ -207,6 +276,7 @@ export interface CrearGastoInput {
   idempotencyKey: string;
   fecha: string;
   comercio?: string;
+  nota?: string;
 }
 
 export interface CorregirOcrInput {
