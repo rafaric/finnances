@@ -20,6 +20,7 @@ import type {
   GastoRecurrenteResponseDTO,
   InstanciaRecurrenteResponseDTO,
   CargoResumenResponseDTO,
+  PagoResumenResponseDTO,
   ResumenResponseDTO,
   CrearCompraInput,
   CompraResponseDTO,
@@ -199,6 +200,14 @@ export function reconciliarResumen(token: string, resumenId: string): Promise<Re
 export function listResumens(token: string, cuentaId?: string): Promise<ResumenResponseDTO[]> {
   const query = cuentaId ? `?cuentaId=${encodeURIComponent(cuentaId)}` : "";
   return request<ResumenResponseDTO[]>(token, `/api/v1/resumenes${query}`);
+}
+
+export function registrarPagoResumen(token: string, resumenId: string, input: { cuentaOrigenId: string; monto: string; fecha: string; tipo: "MANUAL" }): Promise<unknown> {
+  return request<unknown>(token, `/api/v1/resumenes/${encodeURIComponent(resumenId)}/pagos`, { method: "POST", body: JSON.stringify({ ...input, idempotencyKey: crypto.randomUUID() }) });
+}
+
+export function listPagosResumen(token: string, resumenId: string): Promise<PagoResumenResponseDTO[]> {
+  return request<PagoResumenResponseDTO[]>(token, `/api/v1/resumenes/${encodeURIComponent(resumenId)}/pagos`);
 }
 
 export function listCategorias(

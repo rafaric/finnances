@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { analizarResumenPdf, crearCompra, eliminarCompra, listCargosResumen, listCategorias, listCompras, listResumens, reconciliarResumen, resolverCargoResumen } from "../../api/client";
-import type { CargoResumenResponseDTO, CategoriaResponseDTO, CompraResponseDTO, ConsumoExtraidoDTO, CuentaResponseDTO, ResumenResponseDTO } from "../../api/types";
+import { actualizarCuenta, analizarResumenPdf, crearCompra, eliminarCompra, listCargosResumen, listCategorias, listCompras, listPagosResumen, listResumens, reconciliarResumen, registrarPagoResumen, resolverCargoResumen } from "../../api/client";
+import type { CargoResumenResponseDTO, CategoriaResponseDTO, CompraResponseDTO, ConsumoExtraidoDTO, CuentaResponseDTO, PagoResumenResponseDTO, ResumenResponseDTO } from "../../api/types";
 
 interface TarjetasProps {
   token: string;
@@ -54,6 +54,13 @@ export function Tarjetas({ token, accounts }: TarjetasProps) {
   const [purchaseCategoryId, setPurchaseCategoryId] = useState("");
   const purchaseFormRef = useRef<HTMLDivElement>(null);
   const [selectedConsumptionLabel, setSelectedConsumptionLabel] = useState<string>();
+  const [paymentAccountId, setPaymentAccountId] = useState("");
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [isSavingPayment, setIsSavingPayment] = useState(false);
+  const [payments, setPayments] = useState<PagoResumenResponseDTO[]>([]);
+  const [debitAccountId, setDebitAccountId] = useState("");
+  const fundingAccounts = accounts.filter((account) => account.tipo !== "TARJETA_CREDITO");
+  const selectedCard = cards.find((card) => card.id === accountId);
 
   function preparePurchaseDraft(nextSummary: ResumenResponseDTO) {
     if (nextSummary.estadoConciliacion !== "CON_DIFERENCIA" || nextSummary.diferenciaConciliacion == null) return;
@@ -77,6 +84,10 @@ export function Tarjetas({ token, accounts }: TarjetasProps) {
   }, [accountId, cards]);
 
   useEffect(() => {
+    setDebitAccountId(selectedCard?.cuentaDebitoMinimoId ?? "");
+  }, [selectedCard?.cuentaDebitoMinimoId]);
+
+  useEffect(() => {
     if (!accountId) return;
     void Promise.all([listResumens(token, accountId), listCompras(token, accountId)]).then(async ([nextSummaries, nextPurchases]) => {
       setSummaries(nextSummaries);
@@ -85,7 +96,9 @@ export function Tarjetas({ token, accounts }: TarjetasProps) {
       if (!latest) return;
       setSummary(latest);
       preparePurchaseDraft(latest);
-      setCharges(await listCargosResumen(token, latest.id));
+      const [nextCharges, nextPayments] = await Promise.all([listCargosResumen(token, latest.id), listPagosResumen(token, latest.id)]);
+      setCharges(nextCharges);
+      setPayments(nextPayments);
     }).catch((cause) => setError(cause instanceof Error ? cause.message : "No se pudieron cargar los resúmenes."));
   }, [accountId, token]);
 
@@ -94,7 +107,37 @@ export function Tarjetas({ token, accounts }: TarjetasProps) {
     if (!next) return;
     setSummary(next);
     preparePurchaseDraft(next);
-    setCharges(await listCargosResumen(token, next.id));
+    const [nextCharges, nextPayments] = await Promise.all([listCargosResumen(token, next.id), listPagosResumen(token, next.id)]);
+    setCharges(nextCharges);
+    setPayments(nextPayments);
+  }
+
+  async function updateDebitAccount(cuentaDebitoMinimoId: string) {
+    if (!selectedCard) return;
+    try {
+      await actualizarCuenta(token, selectedCard.id, { cuentaDebitoMinimoId: cuentaDebitoMinimoId || null });
+      setDebitAccountId(cuentaDebitoMinimoId);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "No se pudo configurar la cuenta de débito.");
+    }
+  }
+
+  async function registerManualPayment() {
+    if (!summary || !paymentAccountId || !paymentAmount) return;
+    setIsSavingPayment(true);
+    try {
+      await registrarPagoResumen(token, summary.id, { cuentaOrigenId: paymentAccountId, monto: paymentAmount, fecha: new Date().toISOString().slice(0, 10), tipo: "MANUAL" });
+      const next = await listResumens(token, accountId);
+      const updated = next.find((item) => item.id === summary.id);
+      if (updated) setSummary(updated);
+      setSummaries(next);
+      setPayments(await listPagosResumen(token, summary.id));
+      setPaymentAmount("");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "No se pudo registrar el pago.");
+    } finally {
+      setIsSavingPayment(false);
+    }
   }
 
   useEffect(() => {
@@ -177,6 +220,7 @@ export function Tarjetas({ token, accounts }: TarjetasProps) {
         <label className="form-field"><span>Tarjeta</span><select value={accountId} onChange={(event) => setAccountId(event.target.value)}>{cards.map((card) => <option key={card.id} value={card.id}>{card.nombre}{card.ultimosDigitos ? ` ···· ${card.ultimosDigitos}` : ""}</option>)}</select></label>
         <label className="form-field"><span>PDF protegido</span><input type="file" accept="application/pdf" onChange={(event) => setFile(event.target.files?.[0])} /></label>
       </div>
+      <label className="form-field"><span>Cuenta para débito mínimo automático</span><select value={debitAccountId} onChange={(event) => void updateDebitAccount(event.target.value)}><option value="">Sin configurar</option>{fundingAccounts.map((account) => <option key={account.id} value={account.id}>{account.nombre}</option>)}</select></label>
       <button className="primary-action" type="button" disabled={!file || isLoading} onClick={() => void submit()}>{isLoading ? "Analizando..." : "Analizar resumen"}</button>
     </>}
 
@@ -185,6 +229,8 @@ export function Tarjetas({ token, accounts }: TarjetasProps) {
       {summaries.length > 1 ? <label className="form-field"><span>Resumen a revisar</span><select value={summary.id} onChange={(event) => void selectSummary(event.target.value)}>{summaries.map((item) => <option key={item.id} value={item.id}>{item.periodo} · {money(item.montoTotalInformado)}</option>)}</select></label> : null}
       <div className="section-heading"><div><p className="eyebrow">REVISIÓN</p><h2>{summary.periodo}</h2></div><span className={`reconciliation-badge ${summary.estadoConciliacion.toLowerCase()}`}>{summary.estadoConciliacion.replace("_", " ")}</span></div>
       <div className="statement-metrics"><div><span>Total informado</span><strong>{money(summary.montoTotalInformado)}</strong></div><div><span>Mínimo</span><strong>{money(summary.montoMinimoInformado)}</strong></div><div><span>Consumos</span><strong>{summary.totalConsumosInformado == null ? "No detectado" : money(summary.totalConsumosInformado)}</strong></div><div><span>Diferencia</span><strong>{summary.diferenciaConciliacion == null ? "Pendiente" : money(summary.diferenciaConciliacion)}</strong></div></div>
+      <div className="payment-box"><h3>Pago adicional</h3><p>Pagado: {money(summary.montoPagado ?? 0)} · Pendiente: {money(Math.max(0, summary.montoTotalInformado - (summary.montoPagado ?? 0)))}</p><label className="form-field"><span>Cuenta de origen</span><select value={paymentAccountId} onChange={(event) => setPaymentAccountId(event.target.value)}><option value="">Elegí una cuenta</option>{fundingAccounts.map((account) => <option key={account.id} value={account.id}>{account.nombre}</option>)}</select></label><label className="form-field"><span>Monto a pagar</span><input inputMode="decimal" type="number" min="0.01" step="0.01" value={paymentAmount} onChange={(event) => setPaymentAmount(event.target.value)} /></label><button className="primary-action" type="button" disabled={isSavingPayment || !paymentAccountId || !paymentAmount || summary.estado === "PAGADO_TOTAL"} onClick={() => void registerManualPayment()}>{isSavingPayment ? "Registrando..." : "Registrar pago adicional"}</button></div>
+      {payments.length ? <div className="payment-history"><h3>Pagos registrados</h3>{payments.map((payment) => <div key={payment.id}><span>{payment.tipo === "DEBITO_AUTOMATICO" ? "Débito automático" : "Pago manual"} · {payment.cuentaOrigenNombre}</span><strong>{money(payment.monto)}</strong></div>)}</div> : null}
       <p className="review-note">Este resumen queda pendiente de revisión. Los consumos no se crean nuevamente; sólo se revisan los cargos financieros detectados.</p>
       {summary.consumosExtraidos?.length ? <section className="consumption-queue"><div className="section-heading"><div><h3>Consumos para conciliar</h3><p>{summary.consumosExtraidos.filter((item) => item.estado !== "COINCIDE").length} por revisar de {summary.consumosExtraidos.length}</p></div><span>{summary.consumosExtraidos.filter((item) => item.estado === "COINCIDE").length} coinciden</span></div><div className="consumption-list">{summary.consumosExtraidos.map((consumption, index) => <article className={`consumption-row ${consumption.estado === "COINCIDE" ? "matched" : ""}`} key={`${consumption.fecha}-${consumption.comercio}-${index}`}><div><strong>{consumption.comercio ?? "Comercio no detectado"}</strong><span>{formatConsumption(consumption)} · {consumption.cuotaActual && consumption.cuotasTotales ? `Cuota ${consumption.cuotaActual}/${consumption.cuotasTotales}` : "Compra única"}</span></div><b>{money(consumption.monto)}</b><span className="consumption-status">{consumption.estado === "COINCIDE" ? "Coincide con una cuota" : "Sin registrar"}</span>{consumption.estado !== "COINCIDE" ? <button className="consumption-action" type="button" onClick={() => selectConsumption(consumption)}>Registrar esta compra</button> : consumption.compraId ? <button className="consumption-action" type="button" onClick={() => void removePurchase(consumption.compraId!)}>Eliminar compra</button> : null}</article>)}</div></section> : null}
       {summary.consumosExtraidos?.some((item) => item.estado !== "COINCIDE") ? <div className="missing-purchase" ref={purchaseFormRef}><div><h3>{selectedConsumptionLabel ? `Registrar ${selectedConsumptionLabel}` : "Hay consumos sin registrar"}</h3><p>{selectedConsumptionLabel ? "Revisá los datos y elegí una categoría antes de guardar." : "La diferencia representa compras o cargos que todavía no están en Finnances. Agregá la compra manualmente; no se crea de forma automática."}</p></div><div className="purchase-form"><label className="form-field"><span>Comercio</span><input value={purchaseMerchant} onChange={(event) => setPurchaseMerchant(event.target.value)} placeholder="Nombre del comercio" /></label><label className="form-field"><span>Categoría</span><select required value={purchaseCategoryId} onChange={(event) => setPurchaseCategoryId(event.target.value)}><option value="">Elegí una categoría</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.nombre}</option>)}</select></label><label className="form-field"><span>Monto total</span><input inputMode="decimal" type="number" min="0.01" step="0.01" value={purchaseAmount} onChange={(event) => setPurchaseAmount(event.target.value)} placeholder="0,00" /></label><label className="form-field"><span>Fecha de compra</span><input type="date" value={purchaseDate} onChange={(event) => setPurchaseDate(event.target.value)} /></label><label className="form-field"><span>Cuotas</span><input type="number" min="1" max="120" value={purchaseInstallments} onChange={(event) => setPurchaseInstallments(event.target.value)} /></label><button className="primary-action" type="button" disabled={isSavingPurchase || !purchaseMerchant.trim() || !purchaseAmount || !purchaseCategoryId} onClick={() => void addPurchase()}>{isSavingPurchase ? "Registrando..." : "Agregar compra"}</button></div></div> : null}

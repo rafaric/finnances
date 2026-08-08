@@ -29,13 +29,14 @@ export interface CuentaResponseDTO {
   saldoActual: number;
   diaCierre?: number;
   diaPago?: number;
+  cuentaDebitoMinimoId?: string;
 }
 
 export function toCuentaDTO(
   cuenta: Pick<
     Cuenta,
     | "id" | "nombre" | "tipo" | "banco" | "nombreEntidad" | "ultimosDigitos"
-    | "colorIdentificador" | "saldoInicial" | "diaCierre" | "diaPago"
+     | "colorIdentificador" | "saldoInicial" | "diaCierre" | "diaPago" | "cuentaDebitoMinimoId"
   >,
   saldoCalculado: number,
 ): CuentaResponseDTO {
@@ -51,5 +52,6 @@ export function toCuentaDTO(
     saldoActual: saldoCalculado,
     diaCierre: cuenta.diaCierre ?? undefined,
     diaPago: cuenta.diaPago ?? undefined,
+    cuentaDebitoMinimoId: cuenta.cuentaDebitoMinimoId ?? undefined,
   };
 }

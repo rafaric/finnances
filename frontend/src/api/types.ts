@@ -143,6 +143,7 @@ export interface CuentaResponseDTO extends CuentaResumenDTO {
   saldoInicial: number;
   diaCierre?: number;
   diaPago?: number;
+  cuentaDebitoMinimoId?: string;
 }
 
 export interface TransaccionResponseDTO {
@@ -198,6 +199,8 @@ export interface ResumenResponseDTO {
   montoTotalInformado: number;
   montoMinimoInformado: number;
   totalConsumosInformado?: number;
+  montoPagado?: number;
+  fechaPago?: string;
   saldoFinanciado: number;
   entidadInformada?: string;
   ultimosDigitosInformados?: string;
@@ -232,6 +235,16 @@ export interface CargoResumenResponseDTO {
   transaccionId?: string;
 }
 
+export interface PagoResumenResponseDTO {
+  id: string;
+  resumenId: string;
+  cuentaOrigenId: string;
+  cuentaOrigenNombre: string;
+  monto: number;
+  fecha: string;
+  tipo: "MANUAL" | "DEBITO_AUTOMATICO";
+}
+
 export interface CrearCompraInput {
   montoTotal: string;
   comercio: string;
@@ -263,6 +276,7 @@ export interface CrearCuentaInput {
   colorIdentificador?: string;
   diaCierre?: number;
   diaPago?: number;
+  cuentaDebitoMinimoId?: string | null;
 }
 
 export type ActualizarCuentaInput = Partial<Omit<CrearCuentaInput, "tipo" | "saldoInicial">>;

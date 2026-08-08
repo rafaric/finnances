@@ -42,6 +42,7 @@ import { listarCargosResumen, resolverCargoResumen } from "./services/cargoResum
 import { registrarPagoResumen } from "./services/pagoResumen";
 import { registrarDebitosAutomaticos } from "./services/pagoResumen";
 import { toCargoResumenDTO } from "./dto/cargoResumen";
+import { toPagoResumenDTO } from "./dto/pagoResumen";
 
 function normalizeEntity(value: string): string {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
@@ -209,6 +210,21 @@ export function buildApp(prisma: PrismaClient) {
     }
   });
 
+  app.get("/api/v1/resumenes/:resumenId/pagos", async (request, reply) => {
+    try {
+      const params = z.object({ resumenId: z.string() }).parse(request.params);
+      const pagos = await prisma.pagoResumen.findMany({
+        where: { resumenId: params.resumenId },
+        include: { cuentaOrigen: { select: { nombre: true } } },
+        orderBy: [{ fecha: "desc" }, { id: "desc" }],
+      });
+      return reply.send(pagos.map(toPagoResumenDTO));
+    } catch (error) {
+      if (error instanceof ZodError) return fromZodError(reply, error);
+      return internalError(reply);
+    }
+  });
+
   app.post("/api/v1/ingresos", async (request, reply) => {
     try {
       const input = request.body as { confirmarDebitosAutomaticos?: boolean; cuentaId?: string; fechaCobro?: string; idempotencyKey?: string };
@@ -242,6 +258,7 @@ export function buildApp(prisma: PrismaClient) {
     colorIdentificador: z.string().optional(),
     diaCierre: z.number().int().min(1).max(31).optional(),
     diaPago: z.number().int().min(1).max(31).optional(),
+    cuentaDebitoMinimoId: z.string().nullable().optional(),
   });
 
   app.post("/api/v1/cuentas", async (request, reply) => {
@@ -258,6 +275,7 @@ export function buildApp(prisma: PrismaClient) {
           colorIdentificador: data.colorIdentificador,
           diaCierre: data.diaCierre,
           diaPago: data.diaPago,
+          cuentaDebitoMinimoId: data.cuentaDebitoMinimoId,
         },
       });
       return reply.code(201).send(await toCuentaResponse(cuenta));
@@ -289,6 +307,7 @@ export function buildApp(prisma: PrismaClient) {
           colorIdentificador: data.colorIdentificador,
           diaCierre: data.diaCierre,
           diaPago: data.diaPago,
+          cuentaDebitoMinimoId: data.cuentaDebitoMinimoId,
         },
       });
       return reply.send(await toCuentaResponse(updated));

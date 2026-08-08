@@ -313,6 +313,13 @@ h2 {
 .purchase-library h3 { margin: 0; font-size: 1rem; }
 .purchase-library-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 0; border-bottom: 1px solid #d5e0da; }
 .purchase-library-row span { display: block; margin-top: 3px; color: #6b7f75; font-size: .76rem; }
+.payment-box { display: grid; gap: 12px; padding: 16px; border: 1px solid #b9d5c6; border-radius: 14px; background: #e8f2ea; }
+.payment-box h3, .payment-box p { margin: 0; }
+.payment-box p { color: #527064; font-size: .84rem; }
+.payment-history { display: grid; gap: 8px; }
+.payment-history h3 { margin: 0; }
+.payment-history div { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid #d9e7dc; color: #527064; font-size: .84rem; }
+.payment-history strong { color: #1f3529; }
 @media (min-width: 560px) { .card-picker-row { grid-template-columns: 1fr 1fr; } .statement-metrics { grid-template-columns: repeat(4, 1fr); } }
 .actions-grid button {
   min-height: 72px;
