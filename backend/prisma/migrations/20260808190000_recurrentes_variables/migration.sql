@@ -1,0 +1,2 @@
+-- Existing enum/model fields already support variable recurring expenses.
+-- This migration records the domain transition without changing persisted data.

@@ -66,7 +66,7 @@ export function Home({
   async function loadRecurringInstances() {
     try {
       await proyectarRecurrentes(token, periodo);
-      setRecurringInstances(await listarInstanciasProximas(token, 4));
+       setRecurringInstances(await listarInstanciasProximas(token, 4));
       setRecurringError(undefined);
     } catch (error) {
       setRecurringError(error instanceof Error ? error.message : "No se pudieron cargar los próximos vencimientos.");
@@ -115,9 +115,9 @@ export function Home({
       </div>
       {summaryError ? <ErrorState message={summaryError} onRetry={onRetrySummary} /> : null}
 
-      {recurringInstances.length ? <section className="recurring-due-widget">
+       {recurringInstances.length ? <section className="recurring-due-widget">
         <div className="section-heading"><div><p className="eyebrow">PARA REVISAR</p><h2>Próximos vencimientos</h2></div><span>Dentro de 4 días</span></div>
-        {recurringInstances.map((instance) => <article className="recurring-due-row" key={instance.id}><div><strong>{instance.gastoRecurrente.nombre}</strong><span>{new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "short" }).format(new Date(instance.fechaVencimiento))} · {instance.gastoRecurrente.cuenta.nombre}</span></div><b>{new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(Number(instance.monto))}</b><button type="button" onClick={() => void resolveRecurring(instance.id, "confirm")}>Confirmar</button><button type="button" onClick={() => void resolveRecurring(instance.id, "omit")}>Omitir</button></article>)}
+         {recurringInstances.map((instance) => <article className="recurring-due-row" key={instance.id}><div><strong>{instance.gastoRecurrente.nombre}</strong><span>{new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "short" }).format(new Date(instance.fechaVencimiento))} · {instance.gastoRecurrente.cuenta.nombre}</span></div><b>{instance.monto == null ? "Importe pendiente" : new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(Number(instance.monto))}</b><button type="button" disabled={instance.monto == null} onClick={() => void resolveRecurring(instance.id, "confirm")}>{instance.monto == null ? "Completar importe" : "Confirmar"}</button><button type="button" onClick={() => void resolveRecurring(instance.id, "omit")}>Omitir</button></article>)}
       </section> : recurringError ? <ErrorState message={recurringError} onRetry={() => void loadRecurringInstances()} /> : null}
 
       {pendingItems.length ? <PendingWidget token={token} accounts={accounts} items={pendingItems} onChanged={onPendingChanged} /> : null}

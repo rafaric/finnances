@@ -88,12 +88,15 @@ export interface CrearIngresoInput {
 }
 
 export type FrecuenciaRecurrente = "MENSUAL";
+export const TIPO_MONTO_RECURRENTES = { FIJO: "FIJO", VARIABLE: "VARIABLE" } as const;
+export type TipoMontoRecurrente = (typeof TIPO_MONTO_RECURRENTES)[keyof typeof TIPO_MONTO_RECURRENTES];
 export type EstadoInstanciaRecurrente = "PROYECTADO" | "CONFIRMADO" | "OMITIDO";
 
 export interface GastoRecurrenteResponseDTO {
   id: string;
   nombre: string;
-  montoFijo: number;
+  montoFijo?: number;
+  tipoMonto: TipoMontoRecurrente;
   cuenta: CuentaResumenDTO;
   categoria: CategoriaResponseDTO;
   subcategoria?: SubcategoriaResponseDTO;
@@ -113,12 +116,17 @@ export interface InstanciaRecurrenteResponseDTO {
 
 export interface CrearRecurrenteInput {
   nombre: string;
-  montoFijo: string;
+  tipoMonto: TipoMontoRecurrente;
+  montoFijo?: string;
   cuentaId: string;
   categoriaId: string;
   subcategoriaId?: string;
   diaDelMes: number;
   notas?: string;
+}
+
+export interface ActualizarRecurrenteInput extends Partial<CrearRecurrenteInput> {
+  activo?: boolean;
 }
 
 export type OrigenTransaccion =

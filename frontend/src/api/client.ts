@@ -18,6 +18,7 @@ import type {
   TipoCategoria,
   CrearRecurrenteInput,
   GastoRecurrenteResponseDTO,
+  ActualizarRecurrenteInput,
   InstanciaRecurrenteResponseDTO,
   CargoResumenResponseDTO,
   PagoResumenResponseDTO,
@@ -264,8 +265,8 @@ export function actualizarCategoria(
   });
 }
 
-export function listarRecurrentes(token: string): Promise<GastoRecurrenteResponseDTO[]> {
-  return request<GastoRecurrenteResponseDTO[]>(token, "/api/v1/recurrentes");
+export function listarRecurrentes(token: string, incluirInactivos = false): Promise<GastoRecurrenteResponseDTO[]> {
+  return request<GastoRecurrenteResponseDTO[]>(token, `/api/v1/recurrentes${incluirInactivos ? "?incluirInactivos=true" : ""}`);
 }
 
 export function crearRecurrente(token: string, input: CrearRecurrenteInput): Promise<GastoRecurrenteResponseDTO> {
@@ -275,8 +276,15 @@ export function crearRecurrente(token: string, input: CrearRecurrenteInput): Pro
   });
 }
 
-export function listarInstanciasRecurrentes(token: string): Promise<InstanciaRecurrenteResponseDTO[]> {
-  return request<InstanciaRecurrenteResponseDTO[]>(token, "/api/v1/recurrentes/instancias");
+export function actualizarRecurrente(token: string, id: string, input: ActualizarRecurrenteInput): Promise<GastoRecurrenteResponseDTO> {
+  return request<GastoRecurrenteResponseDTO>(token, `/api/v1/recurrentes/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(input) });
+}
+
+export function listarInstanciasRecurrentes(token: string, params?: { periodo?: string; estado?: "PROYECTADO" | "CONFIRMADO" | "OMITIDO" }): Promise<InstanciaRecurrenteResponseDTO[]> {
+  const query = new URLSearchParams();
+  if (params?.periodo) query.set("periodo", params.periodo);
+  if (params?.estado) query.set("estado", params.estado);
+  return request<InstanciaRecurrenteResponseDTO[]>(token, `/api/v1/recurrentes/instancias${query.toString() ? `?${query}` : ""}`);
 }
 
 export function proyectarRecurrentes(token: string, periodo: string): Promise<InstanciaRecurrenteResponseDTO[]> {
@@ -294,10 +302,10 @@ export function generarInstanciaRecurrente(token: string, recurrenteId: string):
   return request<InstanciaRecurrenteResponseDTO>(token, `/api/v1/recurrentes/${encodeURIComponent(recurrenteId)}/instancia`, { method: "POST" });
 }
 
-export function confirmarInstanciaRecurrente(token: string, instanciaId: string, cuentaRealId?: string): Promise<InstanciaRecurrenteResponseDTO> {
+export function confirmarInstanciaRecurrente(token: string, instanciaId: string, input?: { cuentaRealId?: string; monto?: string; fecha?: string }): Promise<InstanciaRecurrenteResponseDTO> {
   return request<InstanciaRecurrenteResponseDTO>(token, `/api/v1/recurrentes/instancias/${encodeURIComponent(instanciaId)}/confirmar`, {
     method: "POST",
-    body: JSON.stringify({ cuentaRealId }),
+    body: JSON.stringify(input ?? {}),
   });
 }
 

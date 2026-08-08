@@ -564,6 +564,26 @@ async function run() {
     assertErrorShape(res.json(), "UNPROCESSABLE");
     console.log("✓ PATCH /corregir on CONFIRMADA — UNPROCESSABLE ErrorResponseDTO");
   }
+
+  // 14. Recurrentes variables — projection stays pending until real amount is supplied
+  {
+    const create = await app.inject({
+      method: "POST", url: "/api/v1/recurrentes", headers: AUTH,
+      payload: { nombre: `Luz HTTP ${ts}`, tipoMonto: "VARIABLE", cuentaId: cuenta.id, categoriaId: "cat-servicios", diaDelMes: 15 },
+    });
+    if (create.statusCode !== 201) throw new Error(`POST /recurrentes variable: expected 201, got ${create.statusCode} — ${create.body}`);
+    const recurringId = create.json().id;
+    const projected = await app.inject({ method: "POST", url: "/api/v1/recurrentes/proyectar", headers: AUTH, payload: { periodo: "2099-10" } });
+    const instance = projected.json().find((item: { gastoRecurrenteId: string }) => item.gastoRecurrenteId === recurringId);
+    if (!instance || instance.monto !== null || !instance.montoEsEstimado) throw new Error("variable HTTP projection mismatch");
+    const confirmed = await app.inject({ method: "POST", url: `/api/v1/recurrentes/instancias/${instance.id}/confirmar`, headers: AUTH, payload: { monto: "42.50", fecha: "2099-10-16" } });
+    if (confirmed.statusCode !== 200 || Number(confirmed.json().monto) !== 42.5 || confirmed.json().montoEsEstimado) throw new Error(`variable HTTP confirmation mismatch: ${confirmed.body}`);
+    const history = await app.inject({ method: "GET", url: "/api/v1/recurrentes/instancias?periodo=2099-10&estado=CONFIRMADO", headers: AUTH });
+    if (history.statusCode !== 200 || !history.json().some((item: { id: string }) => item.id === instance.id)) throw new Error("recurring history filter mismatch");
+    const paused = await app.inject({ method: "PATCH", url: `/api/v1/recurrentes/${recurringId}`, headers: AUTH, payload: { activo: false } });
+    if (paused.statusCode !== 200 || paused.json().activo !== false) throw new Error("recurring pause mismatch");
+    console.log("✓ recurrente variable HTTP — projection, confirmation and pause");
+  }
   await prisma.$disconnect();
   console.log("\nAll HTTP DTO shape tests passed ✓");
 }
