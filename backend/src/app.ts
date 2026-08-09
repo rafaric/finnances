@@ -664,8 +664,8 @@ export function buildApp(prisma: PrismaClient) {
       if (query.tipo) where.tipo = query.tipo;
       if (query.activa !== undefined) where.activa = query.activa;
 
-      const categorias = await prisma.categoria.findMany({ where, orderBy: { nombre: "asc" } });
-      return reply.send(categorias.map(toCategoriaDTO));
+      const categorias = await prisma.categoria.findMany({ where, orderBy: { nombre: "asc" }, include: { _count: { select: { transacciones: true, ingresos: true, compras: true, recurrentes: true } } } });
+      return reply.send(categorias.map((categoria) => toCategoriaDTO(categoria, categoria._count.transacciones + categoria._count.ingresos + categoria._count.compras + categoria._count.recurrentes)));
     } catch (error) {
       if (error instanceof ZodError) return fromZodError(reply, error);
       if (error instanceof Error) return fromDomainError(reply, error);
@@ -702,8 +702,8 @@ export function buildApp(prisma: PrismaClient) {
         throw new Error("Debe indicar al menos un campo para actualizar");
       }
 
-      const categoria = await prisma.categoria.findUnique({ where: { id: params.id } });
-      if (!categoria) throw new Error("Categoría no encontrada");
+       const categoria = await prisma.categoria.findUnique({ where: { id: params.id } });
+       if (!categoria) throw new Error("Categoría no encontrada");
 
       const updated = await prisma.categoria.update({
         where: { id: params.id },
@@ -728,17 +728,19 @@ export function buildApp(prisma: PrismaClient) {
     try {
       const query = z.object({
         categoriaId: z.string().optional(),
+        activa: z.coerce.boolean().optional(),
       }).parse(request.query);
 
       const where: any = {};
       if (query.categoriaId) where.categoriaId = query.categoriaId;
 
+      if (query.activa !== undefined) where.activa = query.activa;
       const subcategorias = await prisma.subcategoria.findMany({
         where,
-        include: { categoria: true },
+        include: { categoria: true, _count: { select: { transacciones: true, ingresos: true, recurrentes: true } } },
         orderBy: { nombre: "asc" },
       });
-      return reply.send(subcategorias.map(toSubcategoriaDTO));
+      return reply.send(subcategorias.map((subcategoria) => toSubcategoriaDTO(subcategoria, subcategoria._count.transacciones + subcategoria._count.ingresos + subcategoria._count.recurrentes)));
     } catch (error) {
       if (error instanceof ZodError) return fromZodError(reply, error);
       if (error instanceof Error) return fromDomainError(reply, error);
@@ -749,6 +751,7 @@ export function buildApp(prisma: PrismaClient) {
   const SubcategoriaSchema = z.object({
     nombre: z.string().min(1).max(30),
     categoriaId: z.string(),
+    activa: z.boolean().optional(),
   });
 
   const SubcategoriaUpdateSchema = z.object({
@@ -761,12 +764,13 @@ export function buildApp(prisma: PrismaClient) {
     try {
       const data = SubcategoriaSchema.parse(request.body);
       const categoria = await prisma.categoria.findUnique({ where: { id: data.categoriaId } });
-      if (!categoria) throw new Error("Categoría no encontrada");
+       if (!categoria || !categoria.activa) throw new Error("La categoría no existe o está archivada");
 
       const subcategoria = await prisma.subcategoria.create({
         data: {
           nombre: data.nombre,
           categoriaId: data.categoriaId,
+          activa: data.activa ?? true,
         },
         include: { categoria: true },
       });
@@ -792,12 +796,14 @@ export function buildApp(prisma: PrismaClient) {
         include: { categoria: true },
       });
       if (!subcategoria) throw new Error("Subcategoría no encontrada");
+      if (data.categoriaId && data.categoriaId !== subcategoria.categoriaId) throw new Error("No se puede mover una subcategoría existente; archivala y creá una nueva");
 
       const updated = await prisma.subcategoria.update({
         where: { id: params.id },
         data: {
           nombre: data.nombre,
           categoriaId: data.categoriaId,
+          activa: data.activa,
         },
         include: { categoria: true },
       });

@@ -51,6 +51,7 @@ export interface CategoriaResponseDTO {
   activa: boolean;
   createdAt: string;
   updatedAt: string;
+  uso?: number;
 }
 
 export interface SubcategoriaResponseDTO {
@@ -58,6 +59,8 @@ export interface SubcategoriaResponseDTO {
   nombre: string;
   categoriaId: string;
   categoria: CategoriaResponseDTO;
+  activa?: boolean;
+  uso?: number;
 }
 
 export type EstadoTransaccion =

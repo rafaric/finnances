@@ -228,11 +228,15 @@ export function listCategorias(
 export function listSubcategorias(
   token: string,
   categoriaId?: string,
+  activa?: boolean,
 ): Promise<SubcategoriaResponseDTO[]> {
-  const query = categoriaId ? `?categoriaId=${encodeURIComponent(categoriaId)}` : "";
+  const search = new URLSearchParams();
+  if (categoriaId) search.set("categoriaId", categoriaId);
+  if (activa !== undefined) search.set("activa", String(activa));
+  const query = search.toString();
   return request<SubcategoriaResponseDTO[]>(
     token,
-    `/api/v1/subcategorias${query}`,
+    `/api/v1/subcategorias${query ? `?${query}` : ""}`,
   );
 }
 
@@ -242,6 +246,20 @@ export interface CrearCategoriaInput {
   color: string;
   tipo: TipoCategoria;
   activa?: boolean;
+}
+
+export interface CrearSubcategoriaInput {
+  nombre: string;
+  categoriaId: string;
+  activa?: boolean;
+}
+
+export function crearSubcategoria(token: string, input: CrearSubcategoriaInput): Promise<SubcategoriaResponseDTO> {
+  return request<SubcategoriaResponseDTO>(token, "/api/v1/subcategorias", { method: "POST", body: JSON.stringify(input) });
+}
+
+export function actualizarSubcategoria(token: string, id: string, input: Partial<CrearSubcategoriaInput>): Promise<SubcategoriaResponseDTO> {
+  return request<SubcategoriaResponseDTO>(token, `/api/v1/subcategorias/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(input) });
 }
 
 export function crearCategoria(

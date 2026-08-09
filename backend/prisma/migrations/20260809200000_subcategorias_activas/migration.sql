@@ -1,0 +1,1 @@
+ALTER TABLE "Subcategoria" ADD COLUMN "activa" BOOLEAN NOT NULL DEFAULT true;

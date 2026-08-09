@@ -582,7 +582,25 @@ async function run() {
     if (history.statusCode !== 200 || !history.json().some((item: { id: string }) => item.id === instance.id)) throw new Error("recurring history filter mismatch");
     const paused = await app.inject({ method: "PATCH", url: `/api/v1/recurrentes/${recurringId}`, headers: AUTH, payload: { activo: false } });
     if (paused.statusCode !== 200 || paused.json().activo !== false) throw new Error("recurring pause mismatch");
-    console.log("✓ recurrente variable HTTP — projection, confirmation and pause");
+     console.log("✓ recurrente variable HTTP — projection, confirmation and pause");
+  }
+  // 15. Category lifecycle — archive/reactivate and subcategory lifecycle
+  {
+    const category = await app.inject({ method: "POST", url: "/api/v1/categorias", headers: AUTH, payload: { nombre: `Categoría HTTP ${ts}`, icono: "OTRO", color: "NEGRO", tipo: "GASTO" } });
+    if (category.statusCode !== 201) throw new Error(`POST /categorias: expected 201, got ${category.statusCode}`);
+    const categoryId = category.json().id;
+    const subcategory = await app.inject({ method: "POST", url: "/api/v1/subcategorias", headers: AUTH, payload: { nombre: `Sub HTTP ${ts}`, categoriaId: categoryId } });
+    if (subcategory.statusCode !== 201 || subcategory.json().activa !== true) throw new Error("subcategory creation mismatch");
+    const subcategoryId = subcategory.json().id;
+    const archivedSubcategory = await app.inject({ method: "PATCH", url: `/api/v1/subcategorias/${subcategoryId}`, headers: AUTH, payload: { activa: false } });
+    if (archivedSubcategory.statusCode !== 200 || archivedSubcategory.json().activa !== false) throw new Error("subcategory archive mismatch");
+    const activeSubs = await app.inject({ method: "GET", url: `/api/v1/subcategorias?categoriaId=${categoryId}&activa=true`, headers: AUTH });
+    if (activeSubs.json().some((item: { id: string }) => item.id === subcategoryId)) throw new Error("archived subcategory returned in active query");
+    const archivedCategory = await app.inject({ method: "PATCH", url: `/api/v1/categorias/${categoryId}`, headers: AUTH, payload: { activa: false } });
+    if (archivedCategory.statusCode !== 200 || archivedCategory.json().activa !== false) throw new Error("category archive mismatch");
+    const reactivatedCategory = await app.inject({ method: "PATCH", url: `/api/v1/categorias/${categoryId}`, headers: AUTH, payload: { activa: true } });
+    if (reactivatedCategory.statusCode !== 200 || reactivatedCategory.json().activa !== true) throw new Error("category reactivation mismatch");
+    console.log("✓ categorías y subcategorías — lifecycle archive/reactivate");
   }
   await prisma.$disconnect();
   console.log("\nAll HTTP DTO shape tests passed ✓");

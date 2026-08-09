@@ -35,7 +35,7 @@ export function CategorySelector({
       setSubcategorias([]);
       return;
     }
-    listSubcategorias(token, categoriaId).then(setSubcategorias);
+     listSubcategorias(token, categoriaId, true).then(setSubcategorias);
   }, [token, categoriaId]);
 
   if (isLoading) return <div className="category-loading">Cargando categorías...</div>;

@@ -76,6 +76,7 @@ model Subcategoria {
   id            String            @id @default(cuid())
   nombre        String            @db.VarChar(30)
   categoriaId   String
+  activa        Boolean           @default(true)
   recurrentes   GastoRecurrente[]
   categoria     Categoria         @relation(fields: [categoriaId], references: [id])
   transacciones Transaccion[]
