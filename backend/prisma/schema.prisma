@@ -168,6 +168,19 @@ model Resumen {
   @@unique([cuentaId, periodo])
 }
 
+model AnalisisInsight {
+  id              String         @id @default(cuid())
+  periodo         String         @unique
+  contenido       String         @db.Text
+  estado          EstadoInsight  @default(INVALIDADO)
+  huellaDatos     String?
+  generadoEn      DateTime?
+  invalidadoEn    DateTime        @default(now())
+  error           String?         @db.Text
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+}
+
 model CargoResumen {
   id            String             @id @default(cuid())
   resumenId     String
@@ -389,4 +402,11 @@ enum EstadoInstanciaRecurrente {
   PROYECTADO
   CONFIRMADO
   OMITIDO
+}
+
+enum EstadoInsight {
+  INVALIDADO
+  GENERANDO
+  DISPONIBLE
+  ERROR
 }

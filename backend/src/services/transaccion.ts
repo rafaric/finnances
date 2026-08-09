@@ -9,6 +9,7 @@ import {
 } from "@prisma/client";
 import { z } from "zod";
 import { interpretarConGemini } from "./geminiOCR";
+import { invalidarAnalisisInsight } from "./analisisInsight";
 
 const TransaccionSchema = z.object({
   monto: z.string().or(z.number()),
@@ -307,6 +308,9 @@ export async function crearTransaccion(
     return created as Transaccion;
   });
 
+  if (result.estado === EstadoTransaccion.CONFIRMADA) {
+    await invalidarAnalisisInsight(prisma, result.fecha.toISOString().slice(0, 7));
+  }
   return result;
 }
 

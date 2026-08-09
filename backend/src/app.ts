@@ -22,6 +22,7 @@ import {
 } from "./services/transaccion";
 import { calcularSaldo } from "./services/saldo";
 import { calcularResumenMensual } from "./services/resumenMensual";
+import { getAnalisisInsight, refreshAnalisisInsight } from "./services/analisisInsight";
 import { crearIngreso } from "./services/ingreso";
 import { toIngresoDTO } from "./dto/ingreso";
 import {
@@ -428,6 +429,28 @@ export function buildApp(prisma: PrismaClient) {
       const { periodo } = ResumenMensualQuerySchema.parse(request.query);
       const resumen = await calcularResumenMensual(prisma, periodo);
       return reply.send(toResumenMensualDTO(resumen));
+    } catch (error) {
+      if (error instanceof ZodError) return fromZodError(reply, error);
+      if (error instanceof Error) return fromDomainError(reply, error);
+      return internalError(reply);
+    }
+  });
+
+  app.get("/api/v1/analisis-insight", async (request, reply) => {
+    try {
+      const { periodo } = ResumenMensualQuerySchema.parse(request.query);
+      return reply.send(await getAnalisisInsight(prisma, periodo));
+    } catch (error) {
+      if (error instanceof ZodError) return fromZodError(reply, error);
+      if (error instanceof Error) return fromDomainError(reply, error);
+      return internalError(reply);
+    }
+  });
+
+  app.post("/api/v1/analisis-insight/refresh", async (request, reply) => {
+    try {
+      const { periodo } = ResumenMensualQuerySchema.parse(request.body);
+      return reply.send(await refreshAnalisisInsight(prisma, periodo));
     } catch (error) {
       if (error instanceof ZodError) return fromZodError(reply, error);
       if (error instanceof Error) return fromDomainError(reply, error);

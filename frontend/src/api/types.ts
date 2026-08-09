@@ -200,6 +200,16 @@ export interface ResumenMensualDTO {
   gastosProyectadosPorCategoria?: GastoCategoriaDTO[];
 }
 
+export type EstadoAnalisisInsight = "INVALIDADO" | "GENERANDO" | "DISPONIBLE" | "ERROR";
+
+export interface AnalisisInsightDTO {
+  periodo: string;
+  contenido?: string;
+  estado: EstadoAnalisisInsight;
+  generadoEn?: string;
+  invalidadoEn: string;
+}
+
 export type EstadoConciliacion = "PENDIENTE" | "COINCIDE" | "CON_DIFERENCIA";
 export type TipoCargoResumen = "INTERESES" | "IMPUESTOS" | "COMISIONES" | "SEGUROS" | "IVA_INTERESES" | "IVA_COMISIONES" | "IVA_IMPUESTOS" | "IMPUESTO_SELLO";
 export type EstadoCargoResumen = "PENDIENTE" | "CONFIRMADO" | "OMITIDO";

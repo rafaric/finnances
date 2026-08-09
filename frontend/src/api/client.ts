@@ -7,6 +7,7 @@ import type {
   ListTransaccionesParams,
   PaginatedResponseDTO,
   ResumenMensualDTO,
+  AnalisisInsightDTO,
   CrearTransferenciaInput,
   CorregirOcrInput,
   TransferenciaResponseDTO,
@@ -153,6 +154,17 @@ export function getResumenMensual(
     token,
     `/api/v1/resumen-mensual?periodo=${encodeURIComponent(periodo)}`,
   );
+}
+
+export function getAnalisisInsight(token: string, periodo: string): Promise<AnalisisInsightDTO> {
+  return request<AnalisisInsightDTO>(token, `/api/v1/analisis-insight?periodo=${encodeURIComponent(periodo)}`);
+}
+
+export function refreshAnalisisInsight(token: string, periodo: string): Promise<AnalisisInsightDTO> {
+  return request<AnalisisInsightDTO>(token, "/api/v1/analisis-insight/refresh", {
+    method: "POST",
+    body: JSON.stringify({ periodo }),
+  });
 }
 
 export async function analizarResumenPdf(token: string, cuentaId: string, file: File): Promise<{ resumen: ResumenResponseDTO; requiereRevision: boolean }> {

@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { z } from "zod";
+import { invalidarAnalisisInsight } from "./analisisInsight";
 
 const IngresoSchema = z.object({
   monto: z.string().or(z.number()),
@@ -36,7 +37,7 @@ export async function crearIngreso(prisma: PrismaClient, input: CrearIngresoInpu
   const fecha = new Date(`${data.fechaCobro}T00:00:00.000Z`);
   if (Number.isNaN(fecha.getTime())) throw new Error("Fecha inválida");
 
-  return prisma.ingreso.create({
+  const ingreso = await prisma.ingreso.create({
     data: {
       monto: normalizeAmount(data.monto),
       fechaCobro: fecha,
@@ -47,4 +48,6 @@ export async function crearIngreso(prisma: PrismaClient, input: CrearIngresoInpu
       idempotencyKey: data.idempotencyKey,
     },
   });
+  await invalidarAnalisisInsight(prisma, ingreso.periodoDisponible);
+  return ingreso;
 }
