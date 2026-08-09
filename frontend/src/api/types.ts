@@ -210,6 +210,14 @@ export interface AnalisisInsightDTO {
   invalidadoEn: string;
 }
 
+export interface TendenciaMesDTO {
+  periodo: string;
+  ingresos: number;
+  gastos: number;
+  ahorro: number;
+  tieneDatos: boolean;
+}
+
 export type EstadoConciliacion = "PENDIENTE" | "COINCIDE" | "CON_DIFERENCIA";
 export type TipoCargoResumen = "INTERESES" | "IMPUESTOS" | "COMISIONES" | "SEGUROS" | "IVA_INTERESES" | "IVA_COMISIONES" | "IVA_IMPUESTOS" | "IMPUESTO_SELLO";
 export type EstadoCargoResumen = "PENDIENTE" | "CONFIRMADO" | "OMITIDO";

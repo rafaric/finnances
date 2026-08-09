@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Sparkles } from "lucide-react";
-import { getAnalisisInsight, getResumenMensual, refreshAnalisisInsight } from "../../api/client";
-import type { AnalisisInsightDTO, ResumenMensualDTO } from "../../api/types";
+import { getAnalisisInsight, getResumenMensual, getTendenciaAnalisis, refreshAnalisisInsight } from "../../api/client";
+import type { AnalisisInsightDTO, ResumenMensualDTO, TendenciaMesDTO } from "../../api/types";
 import { ErrorState } from "../../components/ErrorState";
 import { PeriodPills } from "../../components/PeriodPills";
 import { formatPeriod } from "../../lib/periods";
@@ -27,6 +27,10 @@ export function Analisis({ token, initialPeriod }: AnalisisProps) {
   const [insight, setInsight] = useState<AnalisisInsightDTO>();
   const [insightError, setInsightError] = useState<string>();
   const [isRefreshingInsight, setIsRefreshingInsight] = useState(false);
+  const [trend, setTrend] = useState<TendenciaMesDTO[]>([]);
+  const [isLoadingTrend, setIsLoadingTrend] = useState(true);
+  const [trendError, setTrendError] = useState<string>();
+  const [trendRetry, setTrendRetry] = useState(0);
 
   const leadingCategory = summary?.gastosPorCategoria[0];
   const descriptiveReading = leadingCategory
@@ -55,6 +59,17 @@ export function Analisis({ token, initialPeriod }: AnalisisProps) {
 
   useEffect(() => {
     let active = true;
+    setIsLoadingTrend(true);
+    setTrendError(undefined);
+    void getTendenciaAnalisis(token, periodo)
+      .then((result) => { if (active) setTrend(result); })
+      .catch((requestError) => { if (active) setTrendError(requestError instanceof Error ? requestError.message : "No se pudo cargar la evolución."); })
+      .finally(() => { if (active) setIsLoadingTrend(false); });
+    return () => { active = false; };
+  }, [periodo, token, trendRetry]);
+
+  useEffect(() => {
+    let active = true;
     setInsight(undefined);
     setInsightError(undefined);
     void getAnalisisInsight(token, periodo).then((result) => {
@@ -72,6 +87,15 @@ export function Analisis({ token, initialPeriod }: AnalisisProps) {
     setIsRefreshingInsight(true);
     try { setInsight(await refreshAnalisisInsight(token, periodo)); setInsightError(undefined); } catch (requestError) { setInsightError(requestError instanceof Error ? requestError.message : "No se pudo actualizar la lectura."); } finally { setIsRefreshingInsight(false); }
   }
+
+  const chartMax = Math.max(...trend.flatMap((month) => [month.ingresos, month.gastos]), 1);
+  const comparison = trend.length >= 2 ? trend.slice(-2) : [];
+  const previous = comparison[0];
+  const current = comparison[1];
+  const expenseChange = previous?.tieneDatos && current?.tieneDatos && previous.gastos > 0
+    ? Math.round(((current.gastos - previous.gastos) / previous.gastos) * 100)
+    : undefined;
+  const formatMonth = (value: string) => new Intl.DateTimeFormat("es-AR", { month: "short" }).format(new Date(`${value}-01T12:00:00`));
 
   return (
     <section className="analisis-page">
@@ -111,6 +135,16 @@ export function Analisis({ token, initialPeriod }: AnalisisProps) {
                 ))}
               </div>
             ) : <div className="analysis-empty"><span>—</span><h2>Sin movimientos confirmados</h2><p>Cuando registres movimientos en este período, acá vas a ver cómo se distribuyen.</p></div>}
+          </section>
+          <section className="analysis-section analysis-trend-section">
+            <div className="section-heading"><div><p className="eyebrow">ÚLTIMOS 6 MESES</p><h2>Evolución</h2><p>Ingresos y gastos confirmados por período.</p></div></div>
+            {isLoadingTrend ? <div className="trend-skeleton" role="status" aria-label="Cargando evolución"><span /><span /><span /><span /><span /><span /></div> : trendError ? <ErrorState message={trendError} onRetry={() => setTrendRetry((current) => current + 1)} /> : <>
+              <div className="trend-chart" aria-label="Evolución de ingresos y gastos">
+                {trend.map((month) => <div className="trend-month" key={month.periodo}><div className="trend-bars">{month.tieneDatos ? <><span className="trend-bar income" style={{ height: `${Math.max((month.ingresos / chartMax) * 100, month.ingresos ? 4 : 0)}%` }} title={`Ingresos ${currency(month.ingresos)}`} /><span className="trend-bar expense" style={{ height: `${Math.max((month.gastos / chartMax) * 100, month.gastos ? 4 : 0)}%` }} title={`Gastos ${currency(month.gastos)}`} /></> : <span className="trend-no-data">Sin datos</span>}</div><small>{formatMonth(month.periodo)}</small></div>)}
+              </div>
+              <div className="trend-legend"><span><i className="income" />Ingresos</span><span><i className="expense" />Gastos</span></div>
+              {expenseChange !== undefined ? <p className="trend-comparison">Los gastos fueron <strong>{Math.abs(expenseChange)}% {expenseChange <= 0 ? "menores" : "mayores"}</strong> que en {formatMonth(previous.periodo)}.</p> : <p className="trend-comparison muted">No hay dos períodos consecutivos con datos suficientes para comparar.</p>}
+            </>}
           </section>
         </>
       ) : null}

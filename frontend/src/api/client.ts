@@ -8,6 +8,7 @@ import type {
   PaginatedResponseDTO,
   ResumenMensualDTO,
   AnalisisInsightDTO,
+  TendenciaMesDTO,
   CrearTransferenciaInput,
   CorregirOcrInput,
   TransferenciaResponseDTO,
@@ -166,6 +167,10 @@ export function getResumenMensual(
 
 export function getAnalisisInsight(token: string, periodo: string): Promise<AnalisisInsightDTO> {
   return request<AnalisisInsightDTO>(token, `/api/v1/analisis-insight?periodo=${encodeURIComponent(periodo)}`);
+}
+
+export function getTendenciaAnalisis(token: string, periodo: string, meses = 6): Promise<TendenciaMesDTO[]> {
+  return request<TendenciaMesDTO[]>(token, `/api/v1/analisis/tendencia?periodo=${encodeURIComponent(periodo)}&meses=${meses}`);
 }
 
 export function refreshAnalisisInsight(token: string, periodo: string): Promise<AnalisisInsightDTO> {

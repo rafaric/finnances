@@ -512,6 +512,13 @@ async function run() {
     }
     console.log("✓ GET /api/v1/resumen-mensual — aggregation and transfer exclusion");
 
+    const trendRes = await app.inject({ method: "GET", url: "/api/v1/analisis/tendencia?periodo=2099-10&meses=6", headers: AUTH });
+    if (trendRes.statusCode !== 200) throw new Error(`analysis trend: expected 200, got ${trendRes.statusCode}`);
+    const trend = trendRes.json();
+    if (!Array.isArray(trend) || trend.length !== 6) throw new Error("analysis trend should return six months");
+    if (trend[5].periodo !== "2099-10" || typeof trend[5].tieneDatos !== "boolean") throw new Error("analysis trend shape mismatch");
+    console.log("✓ GET /api/v1/analisis/tendencia — six-month series and no-data flag");
+
     const invalidRes = await app.inject({
       method: "GET",
       url: "/api/v1/resumen-mensual?periodo=2099-13",

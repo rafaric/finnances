@@ -23,6 +23,8 @@ import {
 } from "./services/transaccion";
 import { calcularSaldo } from "./services/saldo";
 import { calcularResumenMensual } from "./services/resumenMensual";
+import { calcularTendenciaAnalisis } from "./services/tendenciaAnalisis";
+import { toTendenciaMesDTO } from "./dto/tendenciaAnalisis";
 import { getAnalisisInsight, refreshAnalisisInsight } from "./services/analisisInsight";
 import { crearIngreso } from "./services/ingreso";
 import { toIngresoDTO } from "./dto/ingreso";
@@ -436,6 +438,17 @@ export function buildApp(prisma: PrismaClient) {
       const { periodo } = ResumenMensualQuerySchema.parse(request.query);
       const resumen = await calcularResumenMensual(prisma, periodo);
       return reply.send(toResumenMensualDTO(resumen));
+    } catch (error) {
+      if (error instanceof ZodError) return fromZodError(reply, error);
+      if (error instanceof Error) return fromDomainError(reply, error);
+      return internalError(reply);
+    }
+  });
+
+  app.get("/api/v1/analisis/tendencia", async (request, reply) => {
+    try {
+      const query = z.object({ periodo: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/), meses: z.coerce.number().int().min(2).max(12).default(6) }).parse(request.query);
+      return reply.send((await calcularTendenciaAnalisis(prisma, query.periodo, query.meses)).map(toTendenciaMesDTO));
     } catch (error) {
       if (error instanceof ZodError) return fromZodError(reply, error);
       if (error instanceof Error) return fromDomainError(reply, error);
