@@ -3,8 +3,8 @@ import { ArrowLeftRight, Settings } from "lucide-react";
 import type { CuentaResponseDTO, ResumenMensualDTO, TransaccionResponseDTO } from "../../api/types";
 import { PendingWidget } from "../../components/PendingWidget";
 import { ErrorState } from "../../components/ErrorState";
-import { LoadingState } from "../../components/LoadingState";
 import { PeriodPills } from "../../components/PeriodPills";
+import { formatPeriod } from "../../lib/periods";
 import { confirmarInstanciaRecurrente, listarInstanciasProximas, omitirInstanciaRecurrente, proyectarRecurrentes } from "../../api/client";
 import type { InstanciaRecurrenteResponseDTO } from "../../api/types";
 
@@ -36,6 +36,10 @@ function currency(value: number): string {
     currency: "ARS",
     maximumFractionDigits: 0,
   }).format(value);
+}
+
+function SkeletonLine({ className = "" }: { className?: string }) {
+  return <span className={`skeleton-line ${className}`} aria-hidden="true" />;
 }
 
 export function Home({
@@ -91,40 +95,39 @@ export function Home({
       <PeriodPills value={periodo} onChange={onPeriodChange} />
 
       <section className="balance-panel">
-        <p>Disponible líquido</p>
-        <strong>{isLoadingSummary ? "Cargando..." : summaryError ? "No disponible" : summary ? currency(summary.disponibleLiquido) : "Sin datos aún"}</strong>
-        <span>{accounts.length ? `${accounts.length} cuenta${accounts.length === 1 ? "" : "s"} conectada${accounts.length === 1 ? "" : "s"}.` : "Creá una cuenta para empezar."}</span>
+        <div className="balance-panel-heading"><p>Disponible líquido</p><span>{formatPeriod(periodo)}</span></div>
+        <strong>{isLoadingSummary ? <SkeletonLine className="skeleton-balance" /> : summaryError ? "No disponible" : summary ? currency(summary.disponibleLiquido) : "Sin datos aún"}</strong>
+        {isLoadingAccounts ? <SkeletonLine className="skeleton-caption" /> : <span>{accounts.length ? `${accounts.length} cuenta${accounts.length === 1 ? "" : "s"} conectada${accounts.length === 1 ? "" : "s"}.` : "Creá una cuenta para empezar."}</span>}
       </section>
 
       <div className="period-grid">
         <article>
           <span>Ingresos del período</span>
-          <strong>{isLoadingSummary ? "Cargando..." : summaryError ? "No disponible" : summary ? currency(summary.ingresos) : "Sin datos"}</strong>
-          <p>Resumen mensual</p>
+          <strong>{isLoadingSummary ? <SkeletonLine className="skeleton-value" /> : summaryError ? "No disponible" : summary ? currency(summary.ingresos) : "Sin datos"}</strong>
+          <p>{isLoadingSummary ? <SkeletonLine className="skeleton-small" /> : "Resumen mensual"}</p>
         </article>
         <article>
           <span>Gastos del período</span>
-          <strong>{isLoadingSummary ? "Cargando..." : summaryError ? "No disponible" : summary ? currency(summary.gastos) : "Sin datos"}</strong>
-          <p>Solo transacciones confirmadas</p>
+          <strong>{isLoadingSummary ? <SkeletonLine className="skeleton-value" /> : summaryError ? "No disponible" : summary ? currency(summary.gastos) : "Sin datos"}</strong>
+          <p>{isLoadingSummary ? <SkeletonLine className="skeleton-small" /> : "Solo transacciones confirmadas"}</p>
         </article>
         <article>
           <span>Gastos proyectados</span>
-          <strong>{isLoadingSummary ? "Cargando..." : summaryError ? "No disponible" : summary ? currency(summary.gastosProyectados ?? 0) : "Sin datos"}</strong>
-          <p>Cuotas con vencimiento en el período</p>
+          <strong>{isLoadingSummary ? <SkeletonLine className="skeleton-value" /> : summaryError ? "No disponible" : summary ? currency(summary.gastosProyectados ?? 0) : "Sin datos"}</strong>
+          <p>{isLoadingSummary ? <SkeletonLine className="skeleton-small" /> : "Cuotas con vencimiento en el período"}</p>
         </article>
+        {summary && summary.deudaTarjetas > 0 ? <article className="period-card-debt"><span>Deuda de tarjetas</span><strong>{currency(summary.deudaTarjetas)}</strong><p>Saldo pendiente</p></article> : null}
       </div>
       {summaryError ? <ErrorState message={summaryError} onRetry={onRetrySummary} /> : null}
 
-       {recurringInstances.length ? <section className="recurring-due-widget">
+      {isLoadingSummary ? <section className="home-attention home-attention-skeleton" aria-label="Cargando pendientes"><div className="section-heading"><div><SkeletonLine className="skeleton-eyebrow" /><SkeletonLine className="skeleton-heading" /></div></div><SkeletonLine className="skeleton-attention-row" /><SkeletonLine className="skeleton-attention-row" /></section> : recurringInstances.length || pendingItems.length ? <section className="home-attention"><div className="section-heading"><div><p className="eyebrow">PARA RESOLVER</p><h2>Lo que requiere atención</h2></div><span>{recurringInstances.length + pendingItems.length} pendientes</span></div>{recurringInstances.length ? <section className="recurring-due-widget">
         <div className="section-heading"><div><p className="eyebrow">PARA REVISAR</p><h2>Próximos vencimientos</h2></div><span>Dentro de 4 días</span></div>
          {recurringInstances.map((instance) => <article className="recurring-due-row" key={instance.id}><div><strong>{instance.gastoRecurrente.nombre}</strong><span>{new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "short" }).format(new Date(instance.fechaVencimiento))} · {instance.gastoRecurrente.cuenta.nombre}</span></div><b>{instance.monto == null ? "Importe pendiente" : new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(Number(instance.monto))}</b><button type="button" disabled={instance.monto == null} onClick={() => void resolveRecurring(instance.id, "confirm")}>{instance.monto == null ? "Completar importe" : "Confirmar"}</button><button type="button" onClick={() => void resolveRecurring(instance.id, "omit")}>Omitir</button></article>)}
-      </section> : recurringError ? <ErrorState message={recurringError} onRetry={() => void loadRecurringInstances()} /> : null}
-
-      {pendingItems.length ? <PendingWidget token={token} accounts={accounts} items={pendingItems} onChanged={onPendingChanged} /> : null}
+       </section> : recurringError ? <ErrorState message={recurringError} onRetry={() => void loadRecurringInstances()} /> : null}{pendingItems.length ? <PendingWidget token={token} accounts={accounts} items={pendingItems} onChanged={onPendingChanged} /> : null}</section> : recurringError ? <ErrorState message={recurringError} onRetry={() => void loadRecurringInstances()} /> : null}
 
       <section className="section-heading">
         <div>
-          <h2>Acciones rápidas</h2>
+          <p className="eyebrow">ACCIONES</p><h2>¿Qué necesitás registrar?</h2>
         </div>
       </section>
 
@@ -144,7 +147,7 @@ export function Home({
           <button className="icon-button" type="button" aria-label="Administrar cuentas" title="Administrar cuentas" onClick={onManageAccounts}><Settings size={18} /></button>
         </div>
         {isAccountsExpanded ? <>
-          {isLoadingAccounts ? <LoadingState label="Cargando cuentas..." /> : accountsError ? <ErrorState message={accountsError} onRetry={onRetryAccounts} /> : accounts.length ? <div className="account-list">
+           {isLoadingAccounts ? <div className="account-list account-list-skeleton"><SkeletonLine /><SkeletonLine /><SkeletonLine /></div> : accountsError ? <ErrorState message={accountsError} onRetry={onRetryAccounts} /> : accounts.length ? <div className="account-list">
             {accounts.map((account) => <div className="account-list-row" key={account.id}><span>{account.nombre}</span><strong>{currency(account.saldoActual)}</strong></div>)}
           </div> : <p className="accounts-empty">Todavía no hay cuentas creadas.</p>}
           <button className="transfer-action" type="button" disabled={accounts.length < 2} onClick={onTransfer}><ArrowLeftRight size={17} />Transferir</button>

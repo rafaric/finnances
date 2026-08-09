@@ -104,8 +104,8 @@ describe("App expense form", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await screen.findByText("Tu plata, en contexto.");
-    await user.click(screen.getByRole("button", { name: "+" }));
+    await screen.findByText("Finnances");
+    await user.click(screen.getByRole("button", { name: "Registrar movimiento" }));
     await user.type(screen.getByRole("spinbutton"), "1250");
     await user.click(screen.getByRole("button", { name: "Ayer" }));
     await user.selectOptions(screen.getByRole("combobox", { name: /Cuenta/ }), account.id);
@@ -130,7 +130,7 @@ describe("App expense form", () => {
     actualizarCuentaMock.mockResolvedValue({ ...account, nombreEntidad: "banco nuevo" });
     render(<App />);
 
-    await screen.findByText("Tu plata, en contexto.");
+    await screen.findByText("Finnances");
     await user.click(screen.getByRole("button", { name: "Administrar cuentas" }));
     await user.click(screen.getByRole("button", { name: "Editar" }));
     const entityInput = screen.getByRole("textbox", { name: "Entidad para OCR" });
@@ -155,7 +155,7 @@ describe("App expense form", () => {
     });
     render(<App />);
 
-    await screen.findByText("Tu plata, en contexto.");
+    await screen.findByText("Finnances");
     await user.click(screen.getByRole("button", { name: /Mis cuentas/ }));
     await user.click(screen.getByRole("button", { name: "Transferir" }));
     await user.type(screen.getByRole("spinbutton"), "1500");
@@ -178,7 +178,7 @@ describe("App expense form", () => {
     listCuentasMock.mockResolvedValue([account, destinationAccount]);
     render(<App />);
 
-    await screen.findByText("Tu plata, en contexto.");
+    await screen.findByText("Finnances");
     await user.click(screen.getByRole("button", { name: /Mis cuentas/ }));
     await user.click(screen.getByRole("button", { name: "Transferir" }));
     await user.type(screen.getByRole("spinbutton"), "10001");
@@ -194,7 +194,7 @@ describe("App expense form", () => {
     crearTransferenciaMock.mockRejectedValue(new Error("Saldo insuficiente para la transferencia"));
     render(<App />);
 
-    await screen.findByText("Tu plata, en contexto.");
+    await screen.findByText("Finnances");
     await user.click(screen.getByRole("button", { name: /Mis cuentas/ }));
     await user.click(screen.getByRole("button", { name: "Transferir" }));
     await user.type(screen.getByRole("spinbutton"), "9000");
@@ -213,7 +213,7 @@ describe("App income form", () => {
     listCategoriasMock.mockResolvedValue([categoriaSueldo]);
     render(<App />);
 
-    await screen.findByText("Tu plata, en contexto.");
+    await screen.findByText("Finnances");
     await user.click(screen.getByRole("button", { name: "Registrar ingreso" }));
     await user.type(screen.getByRole("spinbutton"), "250000");
     await user.click(screen.getByRole("button", { name: "Registrar ingreso" }));
@@ -242,7 +242,7 @@ describe("App income form", () => {
     });
     render(<App />);
 
-    await screen.findByText("Tu plata, en contexto.");
+    await screen.findByText("Finnances");
     await user.click(screen.getByRole("button", { name: "Registrar ingreso" }));
     await user.type(screen.getByRole("spinbutton"), "250000");
     await user.click(screen.getByRole("button", { name: "Sueldo" }));

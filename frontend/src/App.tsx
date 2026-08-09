@@ -11,7 +11,7 @@ import { Categorias } from "./features/categorias/Categorias";
 import { Recurrentes } from "./features/recurrentes/Recurrentes";
 import { Tarjetas } from "./features/tarjetas/Tarjetas";
 import { currentPeriod } from "./lib/periods";
-import { Bolt, X } from "lucide-react";
+import { BarChart3, CreditCard, Home as HomeIcon, List, MoreHorizontal, PlugZap, Plus, Repeat2, Tags, WalletCards, X } from "lucide-react";
 import "./index.css";
 type Screen = "inicio" | "movimientos" | "nuevo" | "transferir" | "analisis" | "categorias" | "recurrentes" | "tarjetas";
 
@@ -56,6 +56,7 @@ function App() {
   const [accountName, setAccountName] = useState("");
   const [accountEntity, setAccountEntity] = useState("");
   const [isAccountsOpen, setIsAccountsOpen] = useState(false);
+  const [isMoreOpen, setIsMoreOpen] = useState(false);
   const [editingAccountId, setEditingAccountId] = useState<string>();
   const [accountFormSaving, setAccountFormSaving] = useState(false);
   const [accountType, setAccountType] = useState<TipoCuenta>("EFECTIVO");
@@ -366,10 +367,12 @@ function App() {
   }
 
   return (
-    <main className="app-shell">
+    <>
+    <a className="skip-link" href="#main-content">Saltar al contenido</a>
+    <main className="app-shell" id="main-content">
       <header className={screen === "inicio" ? "topbar home-topbar" : "topbar compact-topbar"}>
-         {screen === "inicio" ? <div><p className="eyebrow">FINNANCES</p><h1>Tu plata, en contexto.</h1></div> : <h1>{screen === "nuevo" ? "Nueva transacción" : screen === "transferir" ? "Transferir" : screen === "movimientos" ? "Movimientos" : screen === "analisis" ? "Análisis" : screen === "recurrentes" ? "Gastos recurrentes" : screen === "tarjetas" ? "Tarjetas y resúmenes" : "Categorías"}</h1>}
-        <button className="settings-button icon-button" type="button" aria-label="Configuración de conexión" title="Configuración de conexión" onClick={() => setIsConfigOpen(true)}><Bolt size={19} strokeWidth={2.2} /></button>
+         {screen === "inicio" ? <h1>Finnances</h1> : <h1>{screen === "nuevo" ? "Nueva transacción" : screen === "transferir" ? "Transferir" : screen === "movimientos" ? "Movimientos" : screen === "analisis" ? "Análisis" : screen === "recurrentes" ? "Gastos recurrentes" : screen === "tarjetas" ? "Tarjetas y resúmenes" : "Categorías"}</h1>}
+         {screen === "inicio" ? <button className="settings-button icon-button" type="button" aria-label="Configurar conexión" title="Configurar conexión" onClick={() => setIsConfigOpen(true)}><PlugZap size={19} strokeWidth={2.2} /></button> : null}
       </header>
 
       {notice ? <p className="notice" role="status">{notice}</p> : null}
@@ -477,12 +480,14 @@ function App() {
       {screen === "tarjetas" ? <Tarjetas token={connection.token} accounts={accounts} /> : null}
 
       <nav className="bottom-nav" aria-label="Navegación principal">
-        <button className={screen === "inicio" ? "active" : ""} type="button" onClick={() => setScreen("inicio")}>Inicio</button>
-        <button className={screen === "movimientos" ? "active" : ""} type="button" onClick={() => setScreen("movimientos")}>Movimientos</button>
-        <button className="add-button" type="button" onClick={() => setScreen("nuevo")}>+</button>
-        <button className={screen === "analisis" ? "active" : ""} type="button" onClick={() => setScreen("analisis")}>Análisis</button>
-        <button className={screen === "categorias" ? "active" : ""} type="button" onClick={() => setScreen("categorias")}>Categorías</button>
+        <button className={screen === "inicio" ? "active" : ""} type="button" onClick={() => { setScreen("inicio"); setIsMoreOpen(false); }}><HomeIcon size={19} strokeWidth={2.1} /><span>Inicio</span></button>
+        <button className={screen === "movimientos" ? "active" : ""} type="button" onClick={() => { setScreen("movimientos"); setIsMoreOpen(false); }}><List size={19} strokeWidth={2.1} /><span>Movimientos</span></button>
+        <button className="add-button" type="button" aria-label="Registrar movimiento" onClick={() => { setScreen("nuevo"); setIsMoreOpen(false); }}><Plus size={25} strokeWidth={2.2} /></button>
+        <button className={screen === "analisis" ? "active" : ""} type="button" onClick={() => { setScreen("analisis"); setIsMoreOpen(false); }}><BarChart3 size={19} strokeWidth={2.1} /><span>Análisis</span></button>
+        <button className={isMoreOpen || ["tarjetas", "recurrentes", "categorias"].includes(screen) ? "active" : ""} type="button" aria-expanded={isMoreOpen} onClick={() => setIsMoreOpen((current) => !current)}><MoreHorizontal size={19} strokeWidth={2.1} /><span>Más</span></button>
       </nav>
+
+      {isMoreOpen ? <div className="more-sheet-backdrop" role="presentation" onClick={() => setIsMoreOpen(false)}><section className="more-sheet" role="dialog" aria-modal="true" aria-labelledby="more-sheet-title" onClick={(event) => event.stopPropagation()}><div className="more-sheet-heading"><div><p className="eyebrow">NAVEGAR</p><h2 id="more-sheet-title">Más secciones</h2></div><button className="icon-button" type="button" aria-label="Cerrar menú" onClick={() => setIsMoreOpen(false)}><X size={18} /></button></div><div className="more-grid"><button className={screen === "tarjetas" ? "selected" : ""} type="button" onClick={() => { setScreen("tarjetas"); setIsMoreOpen(false); }}><CreditCard size={20} /><span>Tarjetas</span><small>Resúmenes y pagos</small></button><button className={screen === "recurrentes" ? "selected" : ""} type="button" onClick={() => { setScreen("recurrentes"); setIsMoreOpen(false); }}><Repeat2 size={20} /><span>Recurrentes</span><small>Compromisos mensuales</small></button><button className={screen === "categorias" ? "selected" : ""} type="button" onClick={() => { setScreen("categorias"); setIsMoreOpen(false); }}><Tags size={20} /><span>Categorías</span><small>Tu forma de clasificar</small></button><button type="button" onClick={() => { setIsAccountsOpen(true); setIsMoreOpen(false); }}><WalletCards size={20} /><span>Cuentas</span><small>Saldos y conexión</small></button></div></section></div> : null}
 
       {isConfigOpen ? (
         <div className="modal-backdrop" role="presentation">
@@ -546,6 +551,7 @@ function App() {
         </div>
       ) : null}
     </main>
+    </>
   );
 }
 

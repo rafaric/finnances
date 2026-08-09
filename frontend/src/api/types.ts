@@ -137,7 +137,8 @@ export type OrigenTransaccion =
   | "OCR_IA"
   | "MANUAL"
   | "RECURRENTE_CONFIRMADO"
-  | "RESUMEN_CONFIRMADO";
+  | "RESUMEN_CONFIRMADO"
+  | "CUOTA_CONFIRMADA";
 
 export interface CuentaResumenDTO {
   id: string;

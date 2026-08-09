@@ -77,8 +77,8 @@ describe("Movimientos", () => {
   it("loads the first page and displays the transaction origin", async () => {
     render(<Movimientos token="token-123" accounts={[account]} onRegisterExpense={vi.fn()} />);
 
-    expect(await screen.findByText(/OCR/)).toBeInTheDocument();
-    expect(listTransaccionesMock).toHaveBeenCalledWith("token-123", expect.objectContaining({ page: 1, limit: 50 }));
+    expect(await screen.findByTitle("OCR")).toBeInTheDocument();
+    expect(listTransaccionesMock).toHaveBeenCalledWith("token-123", expect.objectContaining({ page: 1, limit: 100 }));
   });
 
   it("navigates pages and resets to page one when a filter changes", async () => {
@@ -89,9 +89,9 @@ describe("Movimientos", () => {
       .mockResolvedValueOnce(pageResult(1, true));
     render(<Movimientos token="token-123" accounts={[account]} onRegisterExpense={vi.fn()} />);
 
-    await screen.findByText(/OCR/);
-    await user.click(screen.getByRole("button", { name: "Siguiente" }));
-    await screen.findByText(/Manual/);
+    await screen.findByTitle("OCR");
+    await user.click(screen.getByRole("button", { name: "Cargar más" }));
+    await screen.findByTitle("Manual");
     expect(listTransaccionesMock).toHaveBeenLastCalledWith("token-123", expect.objectContaining({ page: 2 }));
 
     await user.click(screen.getByRole("button", { name: "Filtrar" }));
@@ -119,7 +119,7 @@ describe("Movimientos", () => {
 
     expect(await screen.findByText("Servidor no disponible")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Reintentar" }));
-    await screen.findByText(/OCR/);
-    expect(listTransaccionesMock).toHaveBeenLastCalledWith("token-123", expect.objectContaining({ page: 1, limit: 50 }));
+    await screen.findByTitle("OCR");
+    expect(listTransaccionesMock).toHaveBeenLastCalledWith("token-123", expect.objectContaining({ page: 1, limit: 100 }));
   });
 });
