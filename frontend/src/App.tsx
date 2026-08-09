@@ -11,6 +11,7 @@ import { Categorias } from "./features/categorias/Categorias";
 import { Recurrentes } from "./features/recurrentes/Recurrentes";
 import { Tarjetas } from "./features/tarjetas/Tarjetas";
 import { currentPeriod } from "./lib/periods";
+import { enqueueOfflineOperation, listOfflineOperations, removeOfflineOperation, updateOfflineOperation, type QueuedOperation } from "./lib/offlineQueue";
 import { BarChart3, CreditCard, Home as HomeIcon, List, MoreHorizontal, PlugZap, Plus, Repeat2, Tags, WalletCards, X } from "lucide-react";
 import "./index.css";
 type Screen = "inicio" | "movimientos" | "nuevo" | "transferir" | "analisis" | "categorias" | "recurrentes" | "tarjetas";
@@ -39,6 +40,10 @@ function browserStorage(kind: "local" | "session"): Storage | undefined {
   } catch {
     return undefined;
   }
+}
+
+function isOfflineError(error: unknown): boolean {
+  return !navigator.onLine || (error instanceof TypeError && error.message === "Failed to fetch");
 }
 
 function App() {
@@ -86,6 +91,7 @@ function App() {
   const [summaryError, setSummaryError] = useState<string>();
   const [summaryRefreshVersion, setSummaryRefreshVersion] = useState(0);
   const [pendingItems, setPendingItems] = useState<TransaccionResponseDTO[]>([]);
+  const [offlineOperations, setOfflineOperations] = useState<QueuedOperation[]>([]);
 
   useEffect(() => {
     setSelectedPeriod(currentPeriod());
@@ -104,8 +110,10 @@ function App() {
       );
       setIsConfigOpen(nextAccounts.length === 0);
     } catch (error) {
-      setAccountsError(error instanceof Error ? error.message : "No se pudieron cargar las cuentas.");
-      setIsConfigOpen(true);
+      if (!isOfflineError(error)) {
+        setAccountsError(error instanceof Error ? error.message : "No se pudieron cargar las cuentas.");
+        setIsConfigOpen(true);
+      }
     } finally {
       setIsLoadingAccounts(false);
     }
@@ -121,7 +129,9 @@ function App() {
       listPendientes(connection.token),
     ])
       .then(([, summary, pending]) => { setMonthlySummary(summary); setPendingItems(pending); })
-      .catch((error) => setSummaryError(error instanceof Error ? error.message : "No se pudo cargar el resumen."))
+      .catch((error) => {
+        if (!isOfflineError(error)) setSummaryError(error instanceof Error ? error.message : "No se pudo cargar el resumen.");
+      })
       .finally(() => setIsLoadingSummary(false));
   }, [connection.token, period, summaryRefreshVersion]);
 
@@ -130,6 +140,50 @@ function App() {
     const timeout = window.setTimeout(() => setNotice(undefined), 5000);
     return () => window.clearTimeout(timeout);
   }, [notice]);
+
+  useEffect(() => {
+    async function syncQueuedOperations() {
+      if (!connection.token || !navigator.onLine) return;
+      try {
+        const operations = await listOfflineOperations();
+        setOfflineOperations(operations);
+        let synced = 0;
+        let failed = 0;
+        let firstError: string | undefined;
+        for (const operation of operations) {
+          try {
+            if (operation.kind === "gasto") await crearGasto(connection.token, operation.payload);
+            else await crearIngreso(connection.token, operation.payload);
+            await removeOfflineOperation(operation.id);
+            synced += 1;
+          } catch (error) {
+            failed += 1;
+            firstError ??= error instanceof Error ? error.message : "No se pudo sincronizar una operación.";
+            await updateOfflineOperation(operation.id, { attempts: operation.attempts + 1, lastError: firstError });
+          }
+        }
+        if (synced > 0) {
+          setNotice(failed > 0 ? `${synced} sincronizada${synced === 1 ? "" : "s"}; ${failed} pendiente${failed === 1 ? "" : "s"}: ${firstError}` : `${synced} operación${synced === 1 ? "" : "es"} sincronizada${synced === 1 ? "" : "s"}.`);
+          await loadAccounts(connection.token);
+          setSummaryRefreshVersion((current) => current + 1);
+          void listPendientes(connection.token).then(setPendingItems).catch(() => undefined);
+        } else if (failed > 0) {
+          setNotice(`${failed} operación${failed === 1 ? "" : "es"} pendiente${failed === 1 ? "" : "s"}: ${firstError}`);
+        }
+        setOfflineOperations(await listOfflineOperations());
+      } catch (error) {
+        if (!isOfflineError(error)) setNotice(error instanceof Error ? error.message : "No se pudo revisar la cola offline.");
+      }
+    }
+
+    void syncQueuedOperations();
+  }, [connection.token]);
+
+  useEffect(() => {
+    const sync = () => window.location.reload();
+    window.addEventListener("online", sync);
+    return () => window.removeEventListener("online", sync);
+  }, [connection.token]);
 
   function saveConnection(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -248,7 +302,7 @@ function App() {
     setIsSaving(true);
     try {
       if (transactionType === "INGRESO") {
-        const income = await crearIngreso(connection.token, {
+        const incomePayload = {
           monto: amount,
           fechaCobro: date,
           periodoDisponible: incomePeriod,
@@ -257,6 +311,14 @@ function App() {
           subcategoriaId,
           idempotencyKey: crypto.randomUUID(),
           confirmarDebitosAutomaticos: confirmAutomaticDebits,
+        };
+        if (!navigator.onLine) {
+          await enqueueOfflineOperation({ id: incomePayload.idempotencyKey, kind: "ingreso", payload: incomePayload });
+          setAmount(""); setCategoriaId(undefined); setSubcategoriaId(undefined); setNotice("Ingreso guardado en el dispositivo. Se sincronizará al reconectar."); setScreen("inicio");
+          return;
+        }
+        const income = await crearIngreso(connection.token, {
+          ...incomePayload,
         });
         setAccounts((current) => current.map((account) => account.id === income.cuenta.id ? { ...account, saldoActual: income.cuenta.saldoActual } : account));
         setMonthlySummary(undefined);
@@ -288,6 +350,12 @@ function App() {
         setInstallments("1");
         setNotice("Compra con tarjeta registrada y cuotas proyectadas.");
         setScreen("inicio");
+        return;
+      }
+      if (!navigator.onLine) {
+        const payload = { monto: amount, cuentaId: selectedAccountId, categoriaId: categoriaId ?? "cat-otros", subcategoriaId, origen: "MANUAL" as const, fecha: date, nota: note.trim() || undefined, idempotencyKey: crypto.randomUUID() };
+        await enqueueOfflineOperation({ id: payload.idempotencyKey, kind: "gasto", payload });
+        setAmount(""); setNote(""); setCategoriaId(undefined); setSubcategoriaId(undefined); setNotice("Gasto guardado en el dispositivo. Se sincronizará al reconectar."); setScreen("inicio");
         return;
       }
       const transaction = await crearGasto(connection.token, {
@@ -401,6 +469,9 @@ function App() {
           periodo={period}
           token={connection.token}
           pendingItems={pendingItems}
+          offlineOperations={offlineOperations}
+          onRetryOffline={() => window.location.reload()}
+          onDiscardOffline={async (id) => { await removeOfflineOperation(id); setOfflineOperations(await listOfflineOperations()); }}
           onPendingChanged={() => {
             void listPendientes(connection.token).then(setPendingItems);
             void loadAccounts(connection.token);

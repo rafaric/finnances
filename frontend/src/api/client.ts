@@ -25,6 +25,7 @@ import type {
   PagoResumenResponseDTO,
   ResumenResponseDTO,
   CrearCompraInput,
+  CrearWalletInput,
   CompraResponseDTO,
 } from "./types";
 
@@ -98,6 +99,13 @@ export function crearGasto(
   input: CrearGastoInput,
 ): Promise<TransaccionResponseDTO> {
   return request<TransaccionResponseDTO>(token, "/api/v1/gastos", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function crearGastoWallet(token: string, input: CrearWalletInput): Promise<TransaccionResponseDTO> {
+  return request<TransaccionResponseDTO>(token, "/api/v1/gastos/wallet", {
     method: "POST",
     body: JSON.stringify(input),
   });

@@ -315,6 +315,14 @@ export interface CrearGastoInput {
   nota?: string;
 }
 
+export interface CrearWalletInput {
+  monto: string;
+  comercio: string;
+  tarjeta: string;
+  fecha?: string;
+  idempotencyKey: string;
+}
+
 export interface CorregirOcrInput {
   monto?: string;
   categoriaId?: string;

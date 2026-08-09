@@ -19,6 +19,7 @@ import {
   resolverCategoriaPendienteTransaccion,
   crearResumenOCR,
   crearTransferenciaInterna,
+  crearTransaccionWallet,
 } from "./services/transaccion";
 import { calcularSaldo } from "./services/saldo";
 import { calcularResumenMensual } from "./services/resumenMensual";
@@ -79,8 +80,14 @@ export function buildApp(prisma: PrismaClient) {
     return toTransaccionDTO({ transaccion, cuenta, categoria: categoria!, subcategoria });
   }
 
+  const allowedOrigins = (process.env.ALLOWED_ORIGIN ?? "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  if (process.env.NODE_ENV !== "production") allowedOrigins.push("http://localhost:4173");
+
   app.register(cors, {
-    origin: process.env.ALLOWED_ORIGIN ?? false,
+    origin: allowedOrigins.length ? allowedOrigins : false,
     methods: ["GET", "POST", "PATCH", "PUT", "DELETE"],
   });
 
@@ -487,6 +494,26 @@ export function buildApp(prisma: PrismaClient) {
       const data = GastoSchema.parse(request.body);
       const resultado = await crearTransaccion(prisma, data);
       return reply.code(201).send(await toTransaccionResponse(resultado));
+    } catch (error) {
+      if (error instanceof ZodError) return fromZodError(reply, error);
+      if (error instanceof Error) return fromDomainError(reply, error);
+      return internalError(reply);
+    }
+  });
+
+  const WalletGastoSchema = z.object({
+    monto: z.string().or(z.number()),
+    comercio: z.string().min(1),
+    tarjeta: z.string().min(4),
+    fecha: z.string().optional(),
+    idempotencyKey: z.string().min(1),
+  });
+
+  app.post("/api/v1/gastos/wallet", async (request, reply) => {
+    try {
+      const resultado = await crearTransaccionWallet(prisma, WalletGastoSchema.parse(request.body));
+      const statusCode = resultado.estado === EstadoTransaccion.CONFIRMADA ? 201 : 202;
+      return reply.code(statusCode).send(await toTransaccionResponse(resultado));
     } catch (error) {
       if (error instanceof ZodError) return fromZodError(reply, error);
       if (error instanceof Error) return fromDomainError(reply, error);

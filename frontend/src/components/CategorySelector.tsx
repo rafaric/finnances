@@ -2,6 +2,30 @@ import { useEffect, useState } from "react";
 import { type CategoriaResponseDTO, type SubcategoriaResponseDTO, type TipoCategoria } from "../api/types";
 import { listCategorias, listSubcategorias } from "../api/client";
 
+const OFFLINE_CATEGORIES: CategoriaResponseDTO[] = [
+  ["cat-comida", "Comida", "UTENSILIOS_COCINA"],
+  ["cat-transporte", "Transporte", "CARRO"],
+  ["cat-vivienda", "Vivienda", "CASA"],
+  ["cat-servicios", "Servicios", "TELEFONO"],
+  ["cat-ocio", "Ocio", "CORAZON"],
+  ["cat-deudas", "Deudas", "LLAVE"],
+  ["cat-otros", "Otros", "OTRO"],
+].map(([id, nombre, icono]) => ({ id, nombre, icono: icono as CategoriaResponseDTO["icono"], color: "VERDE", tipo: "GASTO", activa: true, createdAt: "", updatedAt: "" }));
+const OFFLINE_INCOME_CATEGORIES: CategoriaResponseDTO[] = [
+  ["cat-ingresos", "Ingresos", "LIBROS"],
+  ["cat-sueldo", "Sueldo", "LIBROS"],
+  ["cat-freelance", "Freelance", "AVION"],
+  ["cat-otros-ingreso", "Otros", "OTRO"],
+].map(([id, nombre, icono]) => ({ id, nombre, icono: icono as CategoriaResponseDTO["icono"], color: "VERDE", tipo: "INGRESO", activa: true, createdAt: "", updatedAt: "" }));
+
+function cachedCategories(tipo: TipoCategoria): CategoriaResponseDTO[] {
+  try {
+    return JSON.parse(localStorage.getItem(`finnances.categories.${tipo}`) ?? "null") ?? [];
+  } catch {
+    return [];
+  }
+}
+
 interface CategorySelectorProps {
   token: string;
   tipo: TipoCategoria;
@@ -26,7 +50,14 @@ export function CategorySelector({
   useEffect(() => {
     setIsLoading(true);
     listCategorias(token, { tipo, activa: true })
-      .then(setCategorias)
+      .then((next) => {
+        setCategorias(next);
+        localStorage.setItem(`finnances.categories.${tipo}`, JSON.stringify(next));
+      })
+      .catch(() => {
+        const cached = cachedCategories(tipo);
+        setCategorias(cached.length ? cached : tipo === "GASTO" ? OFFLINE_CATEGORIES : OFFLINE_INCOME_CATEGORIES);
+      })
       .finally(() => setIsLoading(false));
   }, [token, tipo]);
 
@@ -35,7 +66,7 @@ export function CategorySelector({
       setSubcategorias([]);
       return;
     }
-     listSubcategorias(token, categoriaId, true).then(setSubcategorias);
+     listSubcategorias(token, categoriaId, true).then(setSubcategorias).catch(() => setSubcategorias([]));
   }, [token, categoriaId]);
 
   if (isLoading) return <div className="category-loading">Cargando categorías...</div>;

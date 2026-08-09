@@ -70,6 +70,13 @@ async function resolverCuentaOCR(prisma: PrismaClient, textoCrudo: string): Prom
   return digitMatches.length === 1 ? digitMatches[0].id : undefined;
 }
 
+async function resolverCuentaWallet(prisma: PrismaClient, tarjeta: string): Promise<string | undefined> {
+  const digits = tarjeta.match(/(\d{4})\s*$/)?.[1];
+  if (!digits) return undefined;
+  const matches = await prisma.cuenta.findMany({ where: { ultimosDigitos: digits }, select: { id: true } });
+  return matches.length === 1 ? matches[0].id : undefined;
+}
+
 const GastoOCRSchema = z.object({
   textoCrudo: z.string(),
   cuentaId: z.string().optional(),
@@ -86,6 +93,16 @@ const GastoOCRSchema = z.object({
 });
 
 export type CrearTransaccionOCRInput = z.infer<typeof GastoOCRSchema>;
+
+const WalletInputSchema = z.object({
+  monto: z.string().or(z.number()),
+  comercio: z.string().min(1),
+  tarjeta: z.string().min(4),
+  fecha: z.string().optional(),
+  idempotencyKey: z.string().min(1),
+});
+
+export type CrearTransaccionWalletInput = z.infer<typeof WalletInputSchema>;
 
 type OCRFallbackData = z.infer<typeof GastoOCRSchema>["data"];
 
@@ -598,6 +615,43 @@ export async function crearTransaccionOCR(
     textoCrudoOCR: data.textoCrudo,
     esTransferenciaAPersona,
   } as CrearTransaccionInput);
+}
+
+export async function crearTransaccionWallet(
+  prisma: PrismaClient,
+  input: CrearTransaccionWalletInput,
+): Promise<Transaccion> {
+  const data = WalletInputSchema.parse(input);
+  const cuentaId = await resolverCuentaWallet(prisma, data.tarjeta);
+  const fallback = interpretarOCR(JSON.stringify({ monto: data.monto, comercio: data.comercio, fecha: data.fecha }));
+  let interpreted = fallback;
+
+  if (process.env.GEMINI_API_KEY && process.env.NODE_ENV !== "test") {
+    try {
+      const ai = await interpretarConGemini(`Pago Wallet: comercio ${data.comercio}; monto ${data.monto}; fecha ${data.fecha ?? "no informada"}`);
+      if (ai) interpreted = { ...fallback, monto: ai.monto == null ? undefined : String(ai.monto), categoria: ai.categoria ?? undefined, comercio: ai.comercio ?? data.comercio, fecha: ai.fecha ?? data.fecha, exito: Boolean(ai.monto && ai.categoria) };
+    } catch {
+      interpreted = { ...fallback, categoria: undefined, exito: false };
+    }
+  }
+
+  const categoriaId = interpreted.categoria ? categoriaNombreToId(interpreted.categoria) : undefined;
+  const estado = cuentaId && interpreted.monto && categoriaId
+    ? EstadoTransaccion.CONFIRMADA
+    : cuentaId && interpreted.monto
+      ? EstadoTransaccion.PENDIENTE_CATEGORIA
+      : EstadoTransaccion.PENDIENTE_REVISION;
+
+  return crearTransaccion(prisma, {
+    monto: interpreted.monto ?? "0",
+    cuentaId,
+    categoriaId: categoriaId ?? "cat-otros",
+    origen: OrigenTransaccion.APPLE_PAY,
+    idempotencyKey: data.idempotencyKey,
+    comercio: data.comercio,
+    fecha: data.fecha,
+    estado,
+  });
 }
 
 const ResumenOCRInput = z.object({

@@ -72,10 +72,10 @@ ejecutables de forma aislada.
 
 ## Después del próximo slice
 
-- [ ] Integrar payload real del Atajo iOS/Apple Pay.
-- [ ] Matching automático de cuenta por `ultimosDigitos`.
+- [x] Endpoint Wallet para payload del Atajo iOS/Apple Pay.
+- [x] Matching automático de cuenta Wallet por `ultimosDigitos`.
 - [ ] Mejorar confianza y corrección del OCR con IA.
-- [ ] Soporte offline básico para captura manual.
+- [x] Soporte offline básico para captura manual e ingresos.
 - [ ] Tests E2E de los flujos críticos.
 - [ ] CI con TypeScript, tests y formato/lint.
 - [ ] Reset controlado de `finnances_test` entre ejecuciones.

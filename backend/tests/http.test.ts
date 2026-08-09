@@ -112,7 +112,7 @@ async function run() {
   {
     const res = await app.inject({
       method: "POST", url: "/api/v1/cuentas", headers: AUTH,
-      payload: { nombre: "Banco Test", tipo: "CUENTA_BANCARIA", saldoInicial: "1000", banco: "Galicia", nombreEntidad: `Banco Galicia ${ts}`, diaCierre: 5, diaPago: 15 },
+      payload: { nombre: "Banco Test", tipo: "CUENTA_BANCARIA", saldoInicial: "1000", banco: "Galicia", nombreEntidad: `Banco Galicia ${ts}`, ultimosDigitos: "1234", diaCierre: 5, diaPago: 15 },
     });
     if (res.statusCode !== 201) throw new Error(`POST /cuentas: expected 201, got ${res.statusCode} — ${res.body}`);
     const body = res.json();
@@ -180,6 +180,17 @@ async function run() {
     if (body.estado !== "CONFIRMADA") throw new Error("estado should be CONFIRMADA");
     if (body.cuenta.saldoActual !== 850) throw new Error(`saldoActual should be 850, got ${body.cuenta.saldoActual}`);
     console.log("✓ POST /api/v1/gastos — TransaccionResponseDTO shape + values");
+  }
+
+  // 5b. POST /api/v1/gastos/wallet — matching by last four digits and idempotency
+  {
+    const payload = { monto: "25", comercio: "Pago Wallet Test", tarjeta: "Visa terminada en 1234", fecha: "2026-08-09", idempotencyKey: `wallet-${ts}` };
+    const first = await app.inject({ method: "POST", url: "/api/v1/gastos/wallet", headers: AUTH, payload });
+    if (![201, 202].includes(first.statusCode)) throw new Error(`POST /gastos/wallet: expected 201/202, got ${first.statusCode} — ${first.body}`);
+    const second = await app.inject({ method: "POST", url: "/api/v1/gastos/wallet", headers: AUTH, payload });
+    if (second.statusCode !== first.statusCode || second.json().id !== first.json().id) throw new Error("Wallet retry should be idempotent");
+    if (first.json().origen !== "APPLE_PAY") throw new Error("Wallet origin should be APPLE_PAY");
+    console.log("✓ POST /api/v1/gastos/wallet — matching and idempotency");
   }
 
   // 5b. GET /api/v1/transacciones — PaginatedResponseDTO shape + filters
