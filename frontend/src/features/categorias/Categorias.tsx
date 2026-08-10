@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { listCategorias, crearCategoria, actualizarCategoria, listSubcategorias, crearSubcategoria, actualizarSubcategoria, type CrearCategoriaInput } from "../../api/client";
 import type { CategoriaResponseDTO, SubcategoriaResponseDTO } from "../../api/types";
 
@@ -18,14 +19,21 @@ interface CategoriaCardProps {
 }
 
 function CategoriaCard({ categoria, subcategorias, token, onUpdated, onSubcategoryUpdated, onEdit, onEditSubcategory, onCreateSubcategory }: CategoriaCardProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
   return (
     <article className={`categoria-card color-${categoria.color.toLowerCase()}`}>
       <div className="categoria-header">
         <span className={`category-icon icon-${categoria.icono.toLowerCase()}`}></span>
         <h3>{categoria.nombre} {categoria.uso ? <small>({categoria.uso} usos)</small> : null}</h3>
         <span className={`tipo-badge tipo-${categoria.tipo.toLowerCase()}`}>{categoria.tipo === "GASTO" ? "Gasto" : "Ingreso"}</span>
+        <div className="categoria-actions">
+          <button type="button" className="archive-button" onClick={onEdit}>Editar</button>
+          <button type="button" className="archive-button" onClick={async () => { await actualizarCategoria(token, categoria.id, { activa: !categoria.activa }); onUpdated(); }}>{categoria.activa ? "Archivar" : "Reactivar"}</button>
+          <button type="button" className="archive-button" onClick={onCreateSubcategory}>+ Subcategoría</button>
+          {subcategorias.length ? <button type="button" className="subcategory-toggle" aria-label={isExpanded ? "Ocultar subcategorías" : "Mostrar subcategorías"} title={isExpanded ? "Ocultar subcategorías" : "Mostrar subcategorías"} aria-expanded={isExpanded} onClick={() => setIsExpanded((current) => !current)}>{isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}</button> : null}
+        </div>
       </div>
-      <div className="categoria-subcategorias">
+      <div className={`categoria-subcategorias ${isExpanded ? "expanded" : "collapsed"}`}>
         {subcategorias.length > 0
           ? subcategorias.map((sub) => (
                 <span key={sub.id} className={`subcategoria-chip ${sub.activa ? "" : "archived"}`}><span>{sub.nombre} {sub.uso ? `· ${sub.uso} usos` : ""}</span><button type="button" onClick={() => onEditSubcategory(sub)}>Editar</button><button type="button" onClick={async () => { await actualizarSubcategoria(token, sub.id, { activa: !sub.activa }); onSubcategoryUpdated(); }}>{sub.activa ? "Archivar" : "Reactivar"}</button></span>
@@ -33,22 +41,6 @@ function CategoriaCard({ categoria, subcategorias, token, onUpdated, onSubcatego
           : <span className="sin-subcategoria">Sin subcategorías</span>
         }
       </div>
-      <button
-        className="archive-button"
-        type="button"
-        onClick={async () => {
-          try {
-            await actualizarCategoria(token, categoria.id, { activa: !categoria.activa });
-            onUpdated();
-          } catch (error) {
-            console.error(error);
-          }
-        }}
-      >
-        {categoria.activa ? "Archivar" : "Reactivar"}
-      </button>
-      <button type="button" className="archive-button" onClick={onEdit}>Editar</button>
-      <button type="button" className="archive-button" onClick={onCreateSubcategory}>+ Subcategoría</button>
     </article>
   );
 }

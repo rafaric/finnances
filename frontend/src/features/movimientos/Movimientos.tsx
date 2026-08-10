@@ -164,10 +164,10 @@ export function Movimientos({ token, accounts, onRegisterExpense }: MovimientosP
               {result.items.map((transaction) => (
                <article className="movement-row" key={transaction.id}>
                   <div className="movement-main">
-                    <span className="movement-category-mark" aria-hidden="true"><span className={`category-icon icon-${transaction.categoria?.icono.toLowerCase() ?? "otro"}`} /></span>
+                    <span className={`movement-category-mark category-color-${transaction.categoria?.color.toLowerCase() ?? "blanco"}`} aria-hidden="true"><span className={`category-icon icon-${transaction.categoria?.icono.toLowerCase() ?? "otro"}`} /></span>
                     <div className="movement-copy">
                       <div className="movement-title"><strong>{transaction.categoria?.nombre ?? "Sin categoría"}</strong><span className={`movement-origin movement-origin-${transaction.origen.toLowerCase()}`} title={originMeta(transaction.origen).label}>{originMeta(transaction.origen).icon}<span className="sr-only">{originMeta(transaction.origen).label}</span></span></div>
-                      <span>{transaction.comercio ?? transaction.cuenta?.nombre ?? "Cuenta sin resolver"} · {formatDate(transaction.fecha)}</span>
+                       <span className="movement-meta">{transaction.comercio ?? transaction.cuenta?.nombre ?? "Cuenta sin resolver"} · {formatDate(transaction.fecha)}</span>
                     </div>
                   </div>
                  <div className="movement-amount">
