@@ -739,11 +739,9 @@ export async function crearTransaccionWallet(
   }
 
   const categoriaId = interpreted.categoria ? categoriaNombreToId(interpreted.categoria) : undefined;
-  const estado = cuentaId && interpreted.monto && categoriaId
-    ? EstadoTransaccion.CONFIRMADA
-    : cuentaId && interpreted.monto
-      ? EstadoTransaccion.PENDIENTE_CATEGORIA
-      : EstadoTransaccion.PENDIENTE_REVISION;
+  // Wallet captures always require confirmation in the PWA, even when the
+  // account, amount, and category can be inferred automatically.
+  const estado = EstadoTransaccion.PENDIENTE_REVISION;
 
   return crearTransaccion(prisma, {
     monto: interpreted.monto ?? "0",
