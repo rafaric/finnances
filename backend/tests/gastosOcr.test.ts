@@ -21,7 +21,7 @@ async function run() {
 
     const confirmed = await crearTransaccionOCR(prisma, {
       textoCrudo:
-        "monto: 150.00, categoria: COMIDA, comercio: La Pizzeria, fecha: 02/08/26",
+        "monto: 150.00, categoria: COMIDA, comercio: La Pizzeria, fecha: 12/08/2026",
       cuentaId: cuenta.id,
       idempotencyKey: key1,
     });
@@ -41,8 +41,8 @@ async function run() {
     if (confirmed.estado !== "CONFIRMADA") {
       throw new Error("Expected first OCR transaction to be CONFIRMADA");
     }
-    if (confirmed.fecha.toISOString() !== "2026-08-02T00:00:00.000Z") {
-      throw new Error(`Expected Argentine date to parse as August 2, got ${confirmed.fecha.toISOString()}`);
+    if (confirmed.fecha.toISOString() !== "2026-08-12T00:00:00.000Z") {
+      throw new Error(`Expected Argentine date to parse as August 12, got ${confirmed.fecha.toISOString()}`);
     }
     if (pending.estado !== "PENDIENTE_CATEGORIA") {
       throw new Error(
@@ -69,6 +69,7 @@ async function run() {
     const corrected = await corregirTransaccionOCR(prisma, pending.id, {
       categoriaId: "cat-comida",
       comercio: "Supermercado",
+      nota: "Compra confirmada desde OCR",
     });
 
     console.log("corrected estado:", corrected.estado);
@@ -83,6 +84,7 @@ async function run() {
     if (corrected.monto.toString() !== "-200") {
       throw new Error("Expected corrected OCR transaction monto to be 200");
     }
+    if (corrected.nota !== "Compra confirmada desde OCR") throw new Error("Expected OCR note to be persisted");
 
     const cuentaAfter = await prisma.cuenta.findUnique({
       where: { id: cuenta.id },

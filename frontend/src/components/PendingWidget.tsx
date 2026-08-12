@@ -22,6 +22,7 @@ export function PendingWidget({ token, accounts, items, onChanged }: PendingWidg
   const [merchant, setMerchant] = useState("");
   const [accountId, setAccountId] = useState("");
   const [date, setDate] = useState("");
+  const [note, setNote] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string>();
 
@@ -33,6 +34,7 @@ export function PendingWidget({ token, accounts, items, onChanged }: PendingWidg
     setMerchant(item.comercio ?? "");
     setAccountId(item.cuenta?.id ?? "");
     setDate(item.fecha.slice(0, 10));
+    setNote(item.nota ?? "");
     setError(undefined);
   }
 
@@ -48,6 +50,7 @@ export function PendingWidget({ token, accounts, items, onChanged }: PendingWidg
         comercio: merchant || undefined,
         fecha: date || undefined,
         cuentaId: accountId || undefined,
+        nota: note.trim() || null,
       });
       setSelected(undefined);
       onChanged();
@@ -94,6 +97,10 @@ export function PendingWidget({ token, accounts, items, onChanged }: PendingWidg
           <label className="form-field">
             <span>Fecha</span>
             <input type="date" value={date} onChange={(event) => setDate(event.target.value)} />
+          </label>
+          <label className="form-field">
+            <span>Notas <small>(opcional)</small></span>
+            <input maxLength={120} value={note} onChange={(event) => setNote(event.target.value)} placeholder="Ej. Pago de servicio" />
           </label>
           <CategorySelector
             token={token}

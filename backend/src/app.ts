@@ -603,6 +603,7 @@ export function buildApp(prisma: PrismaClient) {
     fecha: z.string().optional(),
     cuentaId: z.string().optional(),
     subcategoriaId: z.string().optional(),
+    nota: z.string().max(120).nullable().optional(),
   });
 
   const TransferenciaSchema = z.object({

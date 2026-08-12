@@ -356,6 +356,7 @@ export interface CorregirOcrInput {
   fecha?: string;
   cuentaId?: string;
   subcategoriaId?: string;
+  nota?: string | null;
 }
 
 export interface TransferenciaResponseDTO {

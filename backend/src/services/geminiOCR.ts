@@ -34,7 +34,7 @@ export async function interpretarConGemini(textoCrudo: string): Promise<GeminiOC
 
   const response = await client.models.generateContent({
     model: process.env.GEMINI_MODEL ?? "gemini-flash-lite-latest",
-    contents: `Extraé datos financieros del siguiente texto de comprobante. No inventes valores; usa null si un dato no aparece. La categoría debe ser una de: COMIDA, TRANSPORTE, VIVIENDA, SERVICIOS, OCIO, DEUDAS, OTROS. Marca esTransferenciaAPersona como true solo cuando el destinatario sea claramente una persona física; no uses "Transferencia inmediata" como señal.\n\nTexto:\n${textoCrudo}`,
+    contents: `Extraé datos financieros del siguiente texto de comprobante. No inventes valores; usa null si un dato no aparece. Las fechas están en formato argentino DD/MM/YYYY; convertílas siempre a YYYY-MM-DD sin invertir día y mes. La categoría debe ser una de: COMIDA, TRANSPORTE, VIVIENDA, SERVICIOS, OCIO, DEUDAS, OTROS. Marca esTransferenciaAPersona como true solo cuando el destinatario sea claramente una persona física; no uses "Transferencia inmediata" como señal.\n\nTexto:\n${textoCrudo}`,
     config: {
       responseMimeType: "application/json",
       responseJsonSchema,
