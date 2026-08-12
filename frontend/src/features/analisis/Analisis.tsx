@@ -31,6 +31,7 @@ export function Analisis({ token, initialPeriod }: AnalisisProps) {
   const [isLoadingTrend, setIsLoadingTrend] = useState(true);
   const [trendError, setTrendError] = useState<string>();
   const [trendRetry, setTrendRetry] = useState(0);
+  const [expandedCategoryId, setExpandedCategoryId] = useState<string>();
 
   const leadingCategory = summary?.gastosPorCategoria[0];
   const descriptiveReading = leadingCategory
@@ -126,13 +127,16 @@ export function Analisis({ token, initialPeriod }: AnalisisProps) {
             </div>
             {summary.gastosPorCategoria.length ? (
               <div className="category-breakdown">
-                {summary.gastosPorCategoria.map((item) => (
-                  <div className="category-breakdown-row" key={item.categoria.id}>
-                    <div className="category-breakdown-label"><strong>{item.categoria.nombre}</strong><span>{item.porcentaje.toFixed(2)}%</span></div>
-                    <div className="category-bar"><span style={{ width: `${Math.min(item.porcentaje, 100)}%` }} /></div>
-                    <strong>{currency(item.monto)}</strong>
-                  </div>
-                ))}
+                 {summary.gastosPorCategoria.map((item) => (
+                   <div className="category-breakdown-group" key={item.categoria.id}>
+                   <button className="category-breakdown-row" type="button" aria-expanded={expandedCategoryId === item.categoria.id} onClick={() => setExpandedCategoryId((current) => current === item.categoria.id ? undefined : item.categoria.id)}>
+                     <div className="category-breakdown-label"><strong>{item.categoria.nombre}</strong><span>{item.porcentaje.toFixed(2)}%</span></div>
+                     <div className="category-bar"><span style={{ width: `${Math.min(item.porcentaje, 100)}%` }} /></div>
+                     <strong>{currency(item.monto)}</strong>
+                   </button>
+                   {expandedCategoryId === item.categoria.id && item.subcategorias?.length ? <div className="subcategory-breakdown" aria-label={`Subcategorías de ${item.categoria.nombre}`}>{item.subcategorias.map((subcategoria) => <div className="subcategory-breakdown-row" key={subcategoria.subcategoria.id}><div className="category-breakdown-label"><span>{subcategoria.subcategoria.nombre}</span><span>{subcategoria.porcentaje.toFixed(2)}%</span></div><div className="category-bar"><span style={{ width: `${Math.min(subcategoria.porcentaje, 100)}%` }} /></div><strong>{currency(subcategoria.monto)}</strong></div>)}</div> : null}
+                   </div>
+                 ))}
               </div>
             ) : <div className="analysis-empty"><span>—</span><h2>Sin movimientos confirmados</h2><p>Cuando registres movimientos en este período, acá vas a ver cómo se distribuyen.</p></div>}
           </section>

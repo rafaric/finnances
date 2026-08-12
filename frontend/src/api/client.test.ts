@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiRequestError, crearGasto, crearTransferencia, listTransacciones } from "./client";
+import { ApiRequestError, crearGasto, crearTransferencia, eliminarGasto, listTransacciones } from "./client";
 
 const originalFetch = globalThis.fetch;
 
@@ -100,5 +100,11 @@ describe("API client", () => {
       message: "Monto inválido",
       details: { field: "monto" },
     } satisfies Partial<ApiRequestError>);
+  });
+
+  it("accepts empty 204 responses", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+
+    await expect(eliminarGasto("token-123", "transaction-1")).resolves.toBeUndefined();
   });
 });

@@ -49,7 +49,7 @@ export interface CategoriaResponseDTO {
   color: ColorCategoria;
   tipo: TipoCategoria;
   activa: boolean;
-  createdAt: string;
+  createdAt?: string;
   updatedAt: string;
   uso?: number;
 }
@@ -74,6 +74,7 @@ export interface IngresoResponseDTO {
   moneda: string;
   fechaCobro: string;
   periodoDisponible: string;
+  iniciaCicloFinanciero?: boolean;
   categoria: CategoriaResponseDTO;
   subcategoria?: SubcategoriaResponseDTO;
   cuenta: CuentaResumenDTO;
@@ -83,6 +84,7 @@ export interface CrearIngresoInput {
   monto: string;
   fechaCobro: string;
   periodoDisponible: string;
+  iniciaCicloFinanciero?: boolean;
   cuentaId: string;
   categoriaId: string;
   subcategoriaId?: string;
@@ -163,6 +165,8 @@ export interface TransaccionResponseDTO {
   monto: number;
   moneda: string;
   comercio?: string;
+  nota?: string;
+  createdAt?: string;
   origen: OrigenTransaccion;
   categoria: CategoriaResponseDTO;
   subcategoria?: SubcategoriaResponseDTO;
@@ -185,10 +189,19 @@ export interface GastoCategoriaDTO {
   categoria: CategoriaResponseDTO;
   monto: number;
   porcentaje: number;
+  subcategorias?: GastoSubcategoriaDTO[];
+}
+
+export interface GastoSubcategoriaDTO {
+  subcategoria: { id: string; nombre: string };
+  monto: number;
+  porcentaje: number;
 }
 
 export interface ResumenMensualDTO {
   periodo: string;
+  fechaCierre?: string;
+  fechaVencimiento?: string;
   ingresos: number;
   gastos: number;
   ahorro: number;
@@ -229,6 +242,8 @@ export interface ResumenResponseDTO {
   montoTotalInformado: number;
   montoMinimoInformado: number;
   totalConsumosInformado?: number;
+  totalConsumosUSDInformado?: number;
+  saldoUSDInformado?: number;
   montoPagado?: number;
   fechaPago?: string;
   saldoFinanciado: number;
@@ -249,6 +264,7 @@ export interface ConsumoExtraidoDTO {
   fecha: string | null;
   comercio: string | null;
   monto: number;
+  moneda: "ARS" | "USD";
   cuotaActual: number | null;
   cuotasTotales: number | null;
   estado?: "COINCIDE" | "SIN_REGISTRAR";
@@ -282,11 +298,13 @@ export interface CrearCompraInput {
   cantidadCuotas: number;
   cuentaId: string;
   categoriaId: string;
+  moneda?: "ARS" | "USD";
 }
 
 export interface CompraResponseDTO {
   id: string;
   montoTotal: number;
+  moneda: "ARS" | "USD";
   comercio: string;
   fechaCompra: string;
   cantidadCuotas: number;
@@ -294,7 +312,7 @@ export interface CompraResponseDTO {
   cuotas: CuotaResponseDTO[];
 }
 
-export interface CuotaResponseDTO { id: string; numeroCuota: number; monto: number; fechaImputacion: string; estado: string; }
+export interface CuotaResponseDTO { id: string; numeroCuota: number; monto: number; moneda: "ARS" | "USD"; fechaImputacion: string; estado: string; }
 
 export interface CrearCuentaInput {
   nombre: string;
@@ -347,6 +365,7 @@ export interface TransferenciaResponseDTO {
   monto: number;
   fecha: string;
   nota?: string;
+  createdAt?: string;
 }
 
 export interface CrearTransferenciaInput {

@@ -1,4 +1,4 @@
-import { OrigenTransaccion, PrismaClient, TipoCuenta, TipoPagoResumen } from "@prisma/client";
+import { PrismaClient, TipoCuenta, TipoPagoResumen } from "@prisma/client";
 import { z } from "zod";
 import { crearTransferenciaInterna } from "./transaccion";
 
@@ -26,11 +26,6 @@ export async function registrarPagoResumen(prisma: PrismaClient, resumenId: stri
 
   const source = await prisma.cuenta.findUnique({ where: { id: data.cuentaOrigenId } });
   if (!source || source.tipo === TipoCuenta.TARJETA_CREDITO) throw new Error("La cuenta de pago debe ser una cuenta de fondos");
-  const start = new Date(`${resumen.periodo}-01T00:00:00.000Z`);
-  const end = new Date(start);
-  end.setUTCMonth(end.getUTCMonth() + 1);
-  const cuotas = await prisma.cuota.findMany({ where: { fechaImputacion: { gte: start, lt: end }, estado: "PROYECTADO", compra: { cuentaId: resumen.cuentaId } }, include: { compra: true } });
-  if (cuotas.some((cuota) => !cuota.compra.categoriaId)) throw new Error("Hay cuotas sin categoría que deben corregirse antes de pagar el resumen");
   const transfer = await crearTransferenciaInterna(prisma, {
     cuentaOrigenId: data.cuentaOrigenId,
     cuentaDestinoId: resumen.cuentaId,
@@ -40,11 +35,6 @@ export async function registrarPagoResumen(prisma: PrismaClient, resumenId: stri
     idempotencyKey: `pago-resumen-transfer-${data.idempotencyKey}`,
   });
   const payment = await prisma.pagoResumen.create({ data: { resumenId, cuentaOrigenId: data.cuentaOrigenId, monto: amount, fecha: new Date(data.fecha), tipo: data.tipo, transferenciaId: transfer.id, idempotencyKey: data.idempotencyKey } });
-  for (const cuota of cuotas) {
-    if (!cuota.compra.categoriaId) throw new Error("Hay cuotas sin categoría que deben corregirse antes de pagar el resumen");
-    await prisma.transaccion.create({ data: { monto: Number(cuota.monto) * -1, cuentaId: resumen.cuentaId, categoriaId: cuota.compra.categoriaId, comercio: cuota.compra.comercio, fecha: new Date(data.fecha), estado: "CONFIRMADA", origen: OrigenTransaccion.CUOTA_CONFIRMADA, idempotencyKey: `cuota-pago-${cuota.id}`, cuota: { connect: { id: cuota.id } } } });
-    await prisma.cuota.update({ where: { id: cuota.id }, data: { estado: "CONFIRMADO" } });
-  }
   const totalPaid = Number(paid._sum.monto ?? 0) + amount;
   await prisma.resumen.update({ where: { id: resumenId }, data: { montoPagado: totalPaid, fechaPago: new Date(data.fecha), estado: totalPaid + 0.01 >= Number(resumen.montoTotalInformado) ? "PAGADO_TOTAL" : "PAGADO_PARCIAL" } });
   return payment;

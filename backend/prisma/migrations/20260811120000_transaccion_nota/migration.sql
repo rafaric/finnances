@@ -1,0 +1,1 @@
+ALTER TABLE "Transaccion" ADD COLUMN "nota" VARCHAR(120);

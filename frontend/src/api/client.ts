@@ -71,6 +71,7 @@ async function request<T>(token: string, path: string, init?: RequestInit): Prom
     throw new ApiRequestError(error, response.status);
   }
 
+  if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
 }
 
@@ -129,6 +130,14 @@ export function crearTransferencia(
   });
 }
 
+export function listTransferencias(token: string, params?: { periodo?: string; cuentaId?: string }): Promise<TransferenciaResponseDTO[]> {
+  const search = new URLSearchParams();
+  if (params?.periodo) search.set("periodo", params.periodo);
+  if (params?.cuentaId) search.set("cuentaId", params.cuentaId);
+  const query = search.toString();
+  return request<TransferenciaResponseDTO[]>(token, `/api/v1/transferencias${query ? `?${query}` : ""}`);
+}
+
 export function listTransacciones(
   token: string,
   params: ListTransaccionesParams = {},
@@ -142,6 +151,27 @@ export function listTransacciones(
     token,
     `/api/v1/transacciones${query ? `?${query}` : ""}`,
   );
+}
+
+export interface EditarGastoInput {
+  monto?: string;
+  cuentaId?: string;
+  categoriaId?: string;
+  subcategoriaId?: string | null;
+  comercio?: string | null;
+  nota?: string | null;
+  fecha?: string;
+}
+
+export function editarGasto(token: string, id: string, input: EditarGastoInput): Promise<TransaccionResponseDTO> {
+  return request<TransaccionResponseDTO>(token, `/api/v1/transacciones/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
+export function eliminarGasto(token: string, id: string): Promise<void> {
+  return request<void>(token, `/api/v1/transacciones/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
 export function listPendientes(token: string): Promise<TransaccionResponseDTO[]> {

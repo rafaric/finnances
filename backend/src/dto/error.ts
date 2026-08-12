@@ -32,6 +32,7 @@ const DOMAIN_400 = new Set([
   "Cuenta origen y destino deben ser diferentes",
   "Fecha inválida",
   "Monto inválido",
+  "Saldo insuficiente para registrar el gasto",
   "Saldo insuficiente para la transferencia",
   "No se puede confirmar una transaccion sin cuenta",
   "Entidad OCR ya asociada a otra cuenta",
@@ -41,6 +42,11 @@ const DOMAIN_400 = new Set([
   "Monto inválido",
   "BANK_STATEMENT_PDF_PASSWORD no está configurada",
   "El archivo PDF está vacío",
+  "La categoría debe ser de gasto",
+  "La subcategoría no pertenece a la categoría seleccionada",
+  "Hay cuotas sin categoría que deben corregirse antes de pagar el resumen",
+  "El gasto debe tener una cuenta",
+  "Este movimiento se gestiona desde su sección de origen",
   "No se pudo desbloquear el PDF. Verificá la contraseña o el archivo.",
   "No se pudo convertir el PDF a imágenes.",
   "El PDF no contiene páginas renderizables",
@@ -62,7 +68,6 @@ const DOMAIN_404 = new Set([
   "El resumen ya está pagado",
   "El pago supera el saldo pendiente del resumen",
   "La cuenta de pago debe ser una cuenta de fondos",
-  "Hay cuotas sin categoría que deben corregirse antes de pagar el resumen",
 ]);
 
 const DOMAIN_422 = new Set([

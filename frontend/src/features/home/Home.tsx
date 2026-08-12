@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { ArrowLeftRight, Settings } from "lucide-react";
 import type { CuentaResponseDTO, ResumenMensualDTO, TransaccionResponseDTO } from "../../api/types";
 import { PendingWidget } from "../../components/PendingWidget";
@@ -73,6 +73,11 @@ export function Home({
   const [isAccountsExpanded, setIsAccountsExpanded] = useState(false);
   const [recurringInstances, setRecurringInstances] = useState<InstanciaRecurrenteResponseDTO[]>([]);
   const [recurringError, setRecurringError] = useState<string>();
+  const [selectedRecurring, setSelectedRecurring] = useState<InstanciaRecurrenteResponseDTO>();
+  const [recurringAmount, setRecurringAmount] = useState("");
+  const [recurringAccountId, setRecurringAccountId] = useState("");
+  const [recurringDate, setRecurringDate] = useState("");
+  const [isConfirmingRecurring, setIsConfirmingRecurring] = useState(false);
 
   async function loadRecurringInstances() {
     try {
@@ -88,14 +93,41 @@ export function Home({
 
   useEffect(() => { void loadRecurringInstances(); }, [token, periodo]);
 
-  async function resolveRecurring(id: string, action: "confirm" | "omit") {
+  function openRecurringConfirmation(instance: InstanciaRecurrenteResponseDTO) {
+    setSelectedRecurring(instance);
+    setRecurringAmount(instance.monto == null ? "" : String(instance.monto));
+    setRecurringAccountId(instance.gastoRecurrente.cuenta.id);
+    setRecurringDate(instance.fechaVencimiento.slice(0, 10));
+    setRecurringError(undefined);
+  }
+
+  async function confirmRecurring(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedRecurring || !recurringAccountId) return;
+    setIsConfirmingRecurring(true);
     try {
-      if (action === "confirm") await confirmarInstanciaRecurrente(token, id);
-      else await omitirInstanciaRecurrente(token, id);
+      await confirmarInstanciaRecurrente(token, selectedRecurring.id, {
+        cuentaRealId: recurringAccountId,
+        monto: recurringAmount || undefined,
+        fecha: recurringDate || undefined,
+      });
+      setSelectedRecurring(undefined);
       await loadRecurringInstances();
       onPendingChanged();
     } catch (error) {
       setRecurringError(error instanceof Error ? error.message : "No se pudo resolver el vencimiento.");
+    } finally {
+      setIsConfirmingRecurring(false);
+    }
+  }
+
+  async function omitRecurring(id: string) {
+    try {
+      await omitirInstanciaRecurrente(token, id);
+      await loadRecurringInstances();
+      onPendingChanged();
+    } catch (error) {
+      setRecurringError(error instanceof Error ? error.message : "No se pudo omitir el vencimiento.");
     }
   }
 
@@ -125,15 +157,15 @@ export function Home({
           <strong>{isLoadingSummary ? <SkeletonLine className="skeleton-value" /> : summaryError ? "No disponible" : summary ? currency(summary.gastosProyectados ?? 0) : "Sin datos"}</strong>
           <p>{isLoadingSummary ? <SkeletonLine className="skeleton-small" /> : "Cuotas con vencimiento en el período"}</p>
         </article>
-        {summary && summary.deudaTarjetas > 0 ? <article className="period-card-debt"><span>Deuda de tarjetas</span><strong>{currency(summary.deudaTarjetas)}</strong><p>Saldo pendiente</p></article> : null}
       </div>
       {summaryError ? <ErrorState message={summaryError} onRetry={onRetrySummary} /> : null}
 
       {isLoadingSummary ? <section className="home-attention home-attention-skeleton" aria-label="Cargando pendientes"><div className="section-heading"><div><SkeletonLine className="skeleton-eyebrow" /><SkeletonLine className="skeleton-heading" /></div></div><SkeletonLine className="skeleton-attention-row" /><SkeletonLine className="skeleton-attention-row" /></section> : recurringInstances.length || pendingItems.length ? <section className="home-attention"><div className="section-heading"><div><p className="eyebrow">PARA RESOLVER</p><h2>Lo que requiere atención</h2></div><span>{recurringInstances.length + pendingItems.length} pendientes</span></div>{recurringInstances.length ? <section className="recurring-due-widget">
         <div className="section-heading"><div><p className="eyebrow">PARA REVISAR</p><h2>Próximos vencimientos</h2></div><span>Dentro de 4 días</span></div>
-         {recurringInstances.map((instance) => <article className="recurring-due-row" key={instance.id}><div><strong>{instance.gastoRecurrente.nombre}</strong><span>{new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "short" }).format(new Date(instance.fechaVencimiento))} · {instance.gastoRecurrente.cuenta.nombre}</span></div><b>{instance.monto == null ? "Importe pendiente" : new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(Number(instance.monto))}</b><button type="button" disabled={instance.monto == null} onClick={() => void resolveRecurring(instance.id, "confirm")}>{instance.monto == null ? "Completar importe" : "Confirmar"}</button><button type="button" onClick={() => void resolveRecurring(instance.id, "omit")}>Omitir</button></article>)}
+          {recurringInstances.map((instance) => <article className="recurring-due-row" key={instance.id}><div><strong>{instance.gastoRecurrente.nombre}</strong><span>{new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "short" }).format(new Date(instance.fechaVencimiento))} · {instance.gastoRecurrente.cuenta.nombre}</span></div><b>{instance.monto == null ? "Importe pendiente" : new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(Number(instance.monto))}</b><button type="button" onClick={() => openRecurringConfirmation(instance)}>{instance.monto == null ? "Completar importe" : "Confirmar"}</button><button type="button" onClick={() => void omitRecurring(instance.id)}>Omitir</button></article>)}
        </section> : recurringError ? <ErrorState message={recurringError} onRetry={() => void loadRecurringInstances()} /> : null}{pendingItems.length ? <PendingWidget token={token} accounts={accounts} items={pendingItems} onChanged={onPendingChanged} /> : null}</section> : recurringError ? <ErrorState message={recurringError} onRetry={() => void loadRecurringInstances()} /> : null}
 
+      {selectedRecurring ? <div className="modal-backdrop" role="presentation"><form className="connection-modal" role="dialog" aria-modal="true" aria-labelledby="confirm-recurring-title" onSubmit={confirmRecurring}><div className="section-heading"><div><p className="eyebrow">CONFIRMACIÓN</p><h2 id="confirm-recurring-title">Confirmar gasto recurrente</h2></div><button className="icon-button" type="button" aria-label="Cerrar" onClick={() => setSelectedRecurring(undefined)}>×</button></div><p>{selectedRecurring.gastoRecurrente.nombre}</p><label className="form-field"><span>Importe</span><input required type="number" min="0.01" step="0.01" value={recurringAmount} onChange={(event) => setRecurringAmount(event.target.value)} /></label><label className="form-field"><span>Cuenta que pagó</span><select required value={recurringAccountId} onChange={(event) => setRecurringAccountId(event.target.value)}>{accounts.map((account) => <option key={account.id} value={account.id}>{account.nombre} · {currency(account.saldoActual)}</option>)}</select></label><label className="form-field"><span>Fecha real</span><input required type="date" value={recurringDate} onChange={(event) => setRecurringDate(event.target.value)} /></label>{recurringError ? <p className="notice">{recurringError}</p> : null}<div className="modal-actions"><button type="button" onClick={() => setSelectedRecurring(undefined)}>Cancelar</button><button className="primary-action" type="submit" disabled={isConfirmingRecurring}>{isConfirmingRecurring ? "Confirmando..." : "Confirmar gasto"}</button></div></form></div> : null}
       {offlineOperations.length ? <section className="offline-queue-widget" aria-label="Operaciones offline pendientes"><div className="section-heading"><div><p className="eyebrow">SINCRONIZACIÓN</p><h2>Operaciones pendientes</h2></div><span>{offlineOperations.length}</span></div>{offlineOperations.map((operation) => <article className="offline-queue-row" key={operation.id}><div><strong>{operation.kind === "gasto" ? "Gasto manual" : "Ingreso"}</strong><span>{operation.lastError ?? "Esperando sincronización"}</span></div><button type="button" onClick={onRetryOffline}>Reintentar</button><button type="button" onClick={() => void onDiscardOffline(operation.id)}>Descartar</button></article>)}</section> : null}
 
       <section className="section-heading">

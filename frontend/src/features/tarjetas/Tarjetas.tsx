@@ -22,6 +22,10 @@ function money(value: number): string {
   return new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(value);
 }
 
+function amount(value: number, moneda: "ARS" | "USD"): string {
+  return new Intl.NumberFormat("es-AR", { style: "currency", currency: moneda, maximumFractionDigits: 2 }).format(value);
+}
+
 function formatConsumption(consumption: ConsumoExtraidoDTO): string {
   if (!consumption.fecha) return "Fecha no detectada";
   const value = consumption.fecha.trim();
@@ -54,6 +58,7 @@ export function Tarjetas({ token, accounts }: TarjetasProps) {
   const [purchaseCategoryId, setPurchaseCategoryId] = useState("");
   const purchaseFormRef = useRef<HTMLDivElement>(null);
   const [selectedConsumptionLabel, setSelectedConsumptionLabel] = useState<string>();
+  const [purchaseCurrency, setPurchaseCurrency] = useState<"ARS" | "USD">("ARS");
   const [paymentAccountId, setPaymentAccountId] = useState("");
   const [paymentAmount, setPaymentAmount] = useState("");
   const [isSavingPayment, setIsSavingPayment] = useState(false);
@@ -73,6 +78,7 @@ export function Tarjetas({ token, accounts }: TarjetasProps) {
     setPurchaseMerchant(consumption.comercio ?? "");
     setSelectedConsumptionLabel(consumption.comercio ?? "Consumo seleccionado");
     setPurchaseAmount((consumption.monto * (consumption.cuotasTotales ?? 1)).toFixed(2));
+    setPurchaseCurrency(consumption.moneda);
     setPurchaseDate(consumption.fecha && /^\d{4}-\d{2}-\d{2}$/.test(consumption.fecha) ? consumption.fecha : purchaseDate);
     setPurchaseInstallments(String(consumption.cuotasTotales ?? 1));
     setPurchaseCategoryId((current) => current || categories[0]?.id || "");
@@ -89,6 +95,12 @@ export function Tarjetas({ token, accounts }: TarjetasProps) {
 
   useEffect(() => {
     if (!accountId) return;
+    setSummary(undefined);
+    setSummaries([]);
+    setPurchases([]);
+    setCharges([]);
+    setPayments([]);
+    setError(undefined);
     void Promise.all([listResumens(token, accountId), listCompras(token, accountId)]).then(async ([nextSummaries, nextPurchases]) => {
       setSummaries(nextSummaries);
       setPurchases(nextPurchases);
@@ -180,7 +192,8 @@ export function Tarjetas({ token, accounts }: TarjetasProps) {
         fechaCompra: purchaseDate,
         cantidadCuotas: Number(purchaseInstallments),
         cuentaId: accountId,
-        categoriaId: purchaseCategoryId,
+         categoriaId: purchaseCategoryId,
+         moneda: purchaseCurrency,
       });
       const updatedSummary = await reconciliarResumen(token, summary.id);
       setSummary(updatedSummary);
@@ -228,11 +241,11 @@ export function Tarjetas({ token, accounts }: TarjetasProps) {
     {summary ? <section className="statement-review">
       {summaries.length > 1 ? <label className="form-field"><span>Resumen a revisar</span><select value={summary.id} onChange={(event) => void selectSummary(event.target.value)}>{summaries.map((item) => <option key={item.id} value={item.id}>{item.periodo} · {money(item.montoTotalInformado)}</option>)}</select></label> : null}
       <div className="section-heading"><div><p className="eyebrow">REVISIÓN</p><h2>{summary.periodo}</h2></div><span className={`reconciliation-badge ${summary.estadoConciliacion.toLowerCase()}`}>{summary.estadoConciliacion.replace("_", " ")}</span></div>
-      <div className="statement-metrics"><div><span>Total informado</span><strong>{money(summary.montoTotalInformado)}</strong></div><div><span>Mínimo</span><strong>{money(summary.montoMinimoInformado)}</strong></div><div><span>Consumos</span><strong>{summary.totalConsumosInformado == null ? "No detectado" : money(summary.totalConsumosInformado)}</strong></div><div><span>Diferencia</span><strong>{summary.diferenciaConciliacion == null ? "Pendiente" : money(summary.diferenciaConciliacion)}</strong></div></div>
+       <div className="statement-metrics"><div><span>Total informado</span><strong>{money(summary.montoTotalInformado)}</strong></div><div><span>Mínimo</span><strong>{money(summary.montoMinimoInformado)}</strong></div><div><span>Consumos ARS</span><strong>{summary.totalConsumosInformado == null ? "No detectado" : money(summary.totalConsumosInformado)}</strong></div><div><span>Saldo USD</span><strong>{summary.saldoUSDInformado == null ? "No detectado" : amount(summary.saldoUSDInformado, "USD")}</strong></div></div>
       <div className="payment-box"><h3>Pago adicional</h3><p>Pagado: {money(summary.montoPagado ?? 0)} · Pendiente: {money(Math.max(0, summary.montoTotalInformado - (summary.montoPagado ?? 0)))}</p><label className="form-field"><span>Cuenta de origen</span><select value={paymentAccountId} onChange={(event) => setPaymentAccountId(event.target.value)}><option value="">Elegí una cuenta</option>{fundingAccounts.map((account) => <option key={account.id} value={account.id}>{account.nombre}</option>)}</select></label><label className="form-field"><span>Monto a pagar</span><input inputMode="decimal" type="number" min="0.01" step="0.01" value={paymentAmount} onChange={(event) => setPaymentAmount(event.target.value)} /></label><button className="primary-action" type="button" disabled={isSavingPayment || !paymentAccountId || !paymentAmount || summary.estado === "PAGADO_TOTAL"} onClick={() => void registerManualPayment()}>{isSavingPayment ? "Registrando..." : "Registrar pago adicional"}</button></div>
       {payments.length ? <div className="payment-history"><h3>Pagos registrados</h3>{payments.map((payment) => <div key={payment.id}><span>{payment.tipo === "DEBITO_AUTOMATICO" ? "Débito automático" : "Pago manual"} · {payment.cuentaOrigenNombre}</span><strong>{money(payment.monto)}</strong></div>)}</div> : null}
       <p className="review-note">Este resumen queda pendiente de revisión. Los consumos no se crean nuevamente; sólo se revisan los cargos financieros detectados.</p>
-      {summary.consumosExtraidos?.length ? <section className="consumption-queue"><div className="section-heading"><div><h3>Consumos para conciliar</h3><p>{summary.consumosExtraidos.filter((item) => item.estado !== "COINCIDE").length} por revisar de {summary.consumosExtraidos.length}</p></div><span>{summary.consumosExtraidos.filter((item) => item.estado === "COINCIDE").length} coinciden</span></div><div className="consumption-list">{summary.consumosExtraidos.map((consumption, index) => <article className={`consumption-row ${consumption.estado === "COINCIDE" ? "matched" : ""}`} key={`${consumption.fecha}-${consumption.comercio}-${index}`}><div><strong>{consumption.comercio ?? "Comercio no detectado"}</strong><span>{formatConsumption(consumption)} · {consumption.cuotaActual && consumption.cuotasTotales ? `Cuota ${consumption.cuotaActual}/${consumption.cuotasTotales}` : "Compra única"}</span></div><b>{money(consumption.monto)}</b><span className="consumption-status">{consumption.estado === "COINCIDE" ? "Coincide con una cuota" : "Sin registrar"}</span>{consumption.estado !== "COINCIDE" ? <button className="consumption-action" type="button" onClick={() => selectConsumption(consumption)}>Registrar esta compra</button> : consumption.compraId ? <button className="consumption-action" type="button" onClick={() => void removePurchase(consumption.compraId!)}>Eliminar compra</button> : null}</article>)}</div></section> : null}
+       {summary.consumosExtraidos?.length ? <section className="consumption-queue"><div className="section-heading"><div><h3>Consumos para conciliar</h3><p>{summary.consumosExtraidos.filter((item) => item.estado !== "COINCIDE").length} por revisar de {summary.consumosExtraidos.length}</p></div><span>{summary.consumosExtraidos.filter((item) => item.estado === "COINCIDE").length} coinciden</span></div><div className="consumption-list">{summary.consumosExtraidos.map((consumption, index) => <article className={`consumption-row ${consumption.estado === "COINCIDE" ? "matched" : ""}`} key={`${consumption.fecha}-${consumption.comercio}-${index}`}><div><strong>{consumption.comercio ?? "Comercio no detectado"}</strong><span>{formatConsumption(consumption)} · {consumption.cuotaActual && consumption.cuotasTotales ? `Cuota ${consumption.cuotaActual}/${consumption.cuotasTotales}` : "Compra única"}</span></div><b>{amount(consumption.monto, consumption.moneda)}</b><span className="consumption-status">{consumption.estado === "COINCIDE" ? "Coincide con una cuota" : "Sin registrar"}</span>{consumption.estado !== "COINCIDE" ? <button className="consumption-action" type="button" onClick={() => selectConsumption(consumption)}>Registrar esta compra</button> : consumption.compraId ? <button className="consumption-action" type="button" onClick={() => void removePurchase(consumption.compraId!)}>Eliminar compra</button> : null}</article>)}</div></section> : null}
       {summary.consumosExtraidos?.some((item) => item.estado !== "COINCIDE") ? <div className="missing-purchase" ref={purchaseFormRef}><div><h3>{selectedConsumptionLabel ? `Registrar ${selectedConsumptionLabel}` : "Hay consumos sin registrar"}</h3><p>{selectedConsumptionLabel ? "Revisá los datos y elegí una categoría antes de guardar." : "La diferencia representa compras o cargos que todavía no están en Finnances. Agregá la compra manualmente; no se crea de forma automática."}</p></div><div className="purchase-form"><label className="form-field"><span>Comercio</span><input value={purchaseMerchant} onChange={(event) => setPurchaseMerchant(event.target.value)} placeholder="Nombre del comercio" /></label><label className="form-field"><span>Categoría</span><select required value={purchaseCategoryId} onChange={(event) => setPurchaseCategoryId(event.target.value)}><option value="">Elegí una categoría</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.nombre}</option>)}</select></label><label className="form-field"><span>Monto total</span><input inputMode="decimal" type="number" min="0.01" step="0.01" value={purchaseAmount} onChange={(event) => setPurchaseAmount(event.target.value)} placeholder="0,00" /></label><label className="form-field"><span>Fecha de compra</span><input type="date" value={purchaseDate} onChange={(event) => setPurchaseDate(event.target.value)} /></label><label className="form-field"><span>Cuotas</span><input type="number" min="1" max="120" value={purchaseInstallments} onChange={(event) => setPurchaseInstallments(event.target.value)} /></label><button className="primary-action" type="button" disabled={isSavingPurchase || !purchaseMerchant.trim() || !purchaseAmount || !purchaseCategoryId} onClick={() => void addPurchase()}>{isSavingPurchase ? "Registrando..." : "Agregar compra"}</button></div></div> : null}
       {charges.length ? <div className="charge-list"><h3>Cargos financieros</h3>{charges.map((charge) => <article className="charge-row" key={charge.id}><div><strong>{labels[charge.tipo]}</strong><span>{charge.estado === "PENDIENTE" ? "Requiere confirmación" : charge.estado}</span></div><b>{money(charge.monto)}</b>{charge.estado === "PENDIENTE" ? <div className="charge-actions"><button type="button" onClick={() => void resolveCharge(charge.id, "OMITIDO")}>Omitir</button><button className="primary-action" type="button" onClick={() => void resolveCharge(charge.id, "CONFIRMADO")}>Confirmar cargo</button></div> : null}</article>)}</div> : <p className="review-note">No se detectaron cargos financieros para revisar.</p>}
        <div className="purchase-library"><h3>Compras cargadas</h3>{purchases.length ? purchases.map((purchase) => <article className="purchase-library-row" key={purchase.id}><div><strong>{purchase.comercio}</strong><span>{money(purchase.montoTotal)} · {purchase.cantidadCuotas} cuotas</span></div><button className="consumption-action" type="button" onClick={() => void removePurchase(purchase.id)}>Eliminar</button></article>) : <p className="review-note">Todavía no hay compras cargadas.</p>}</div>

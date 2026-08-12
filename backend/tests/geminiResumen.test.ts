@@ -1,13 +1,17 @@
 import { parseGeminiResumenResponse } from "../src/services/geminiResumen";
 
 const valid = JSON.stringify({
-  consumos: [{ fecha: "2026-07-02", comercio: "Óptica", monto: 100, cuotaActual: 1, cuotasTotales: 3 }],
+  consumos: [{ fecha: "2026-07-02", comercio: "Óptica", monto: 100, moneda: "ARS", cuotaActual: 1, cuotasTotales: 3 }],
   entidad: "Banco Test",
   ultimosDigitos: "1234",
   periodo: "2026-08",
+  fechaCierre: "2026-07-25",
+  fechaVencimiento: "2026-08-05",
   montoTotal: 1000,
   montoMinimo: 100,
   totalConsumos: 900,
+  totalConsumosUSD: null,
+  saldoUSD: null,
   saldoFinanciado: 0,
   intereses: null,
   impuestos: 10,

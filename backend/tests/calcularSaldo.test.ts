@@ -78,6 +78,50 @@ async function run() {
     }
     console.log("✓ cuenta inexistente lanza error");
 
+    // ── 6. tarjeta usa el último resumen y descuenta sus pagos ────────────────
+    const tarjeta = await prisma.cuenta.create({
+      data: { nombre: "Tarjeta Saldo", tipo: "TARJETA_CREDITO", saldoInicial: "0" },
+    });
+    const resumenAnterior = await prisma.resumen.create({
+      data: {
+        cuentaId: tarjeta.id,
+        periodo: "2026-06",
+        montoTotalInformado: "500",
+        montoMinimoInformado: "50",
+      },
+    });
+    await prisma.pagoResumen.create({
+      data: {
+        resumenId: resumenAnterior.id,
+        cuentaOrigenId: cuenta.id,
+        monto: "50",
+        fecha: new Date("2026-07-10"),
+        tipo: "DEBITO_AUTOMATICO",
+        idempotencyKey: `saldo-card-old-${ts}`,
+      },
+    });
+    const resumenActual = await prisma.resumen.create({
+      data: {
+        cuentaId: tarjeta.id,
+        periodo: "2026-07",
+        montoTotalInformado: "1300",
+        montoMinimoInformado: "130",
+      },
+    });
+    await prisma.pagoResumen.create({
+      data: {
+        resumenId: resumenActual.id,
+        cuentaOrigenId: cuenta.id,
+        monto: "130",
+        fecha: new Date("2026-08-10"),
+        tipo: "DEBITO_AUTOMATICO",
+        idempotencyKey: `saldo-card-current-${ts}`,
+      },
+    });
+    const saldoTarjeta = await calcularSaldo(prisma, tarjeta.id);
+    if (saldoTarjeta !== -1170) throw new Error(`Card debt should be -1170, got ${saldoTarjeta}`);
+    console.log("✓ tarjeta muestra deuda del último resumen menos pagos");
+
     console.log("\nAll calcularSaldo tests passed ✓");
   } finally {
     await prisma.$disconnect();

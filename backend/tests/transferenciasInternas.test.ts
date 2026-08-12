@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { crearTransferenciaInterna } from "../src/services/transaccion";
 import { calcularSaldo } from "../src/services/saldo";
+import { crearIngreso } from "../src/services/ingreso";
 
 async function run() {
   const prisma = new PrismaClient();
@@ -88,6 +89,33 @@ async function run() {
       where: { idempotencyKey: rejectedIdempotencyKey },
     });
     if (rejectedTransfer) throw new Error("Expected rejected transfer not to be persisted");
+
+    const salaryAccount = await prisma.cuenta.create({
+      data: { nombre: "Cuenta Sueldo", tipo: "CUENTA_BANCARIA", saldoInicial: "0" },
+    });
+    const incomeCategory = await prisma.categoria.findFirst({ where: { tipo: "INGRESO" } });
+    if (!incomeCategory) throw new Error("Expected an income category in the test database");
+    await crearIngreso(prisma, {
+      monto: "1000",
+      fechaCobro: "2026-06-30",
+      periodoDisponible: "2026-07",
+      cuentaId: salaryAccount.id,
+      categoriaId: incomeCategory.id,
+      idempotencyKey: `salary-${Date.now()}`,
+    });
+    const salaryDestination = await prisma.cuenta.create({
+      data: { nombre: "Cuenta Sueldo Destino", tipo: "EFECTIVO", saldoInicial: "0" },
+    });
+    await crearTransferenciaInterna(prisma, {
+      cuentaOrigenId: salaryAccount.id,
+      cuentaDestinoId: salaryDestination.id,
+      monto: "600",
+      fecha: "2026-06-30",
+      idempotencyKey: `salary-transfer-${Date.now()}`,
+    });
+    if (await calcularSaldo(prisma, salaryAccount.id) !== 400) {
+      throw new Error("Expected salary to fund a transfer on its collection date");
+    }
 
     const exactTransfer = await crearTransferenciaInterna(prisma, {
       cuentaOrigenId: saldoInsuficienteOrigen.id,

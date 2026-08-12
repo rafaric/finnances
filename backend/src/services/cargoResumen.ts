@@ -1,6 +1,5 @@
-import { EstadoCargoResumen, OrigenTransaccion, PrismaClient, TipoCargoResumen } from "@prisma/client";
+import { EstadoCargoResumen, PrismaClient, TipoCargoResumen } from "@prisma/client";
 import { z } from "zod";
-import { crearTransaccion } from "./transaccion";
 
 const ChargeStatusSchema = z.object({ estado: z.enum(["CONFIRMADO", "OMITIDO"]) });
 export type ChargeStatusInput = z.infer<typeof ChargeStatusSchema>;
@@ -22,10 +21,5 @@ export async function resolverCargoResumen(prisma: PrismaClient, cargoId: string
   if (cargo.estado !== EstadoCargoResumen.PENDIENTE) throw new Error("El cargo de resumen ya fue resuelto");
   if (data.estado === "OMITIDO") return prisma.cargoResumen.update({ where: { id: cargoId }, data: { estado: "OMITIDO" } });
 
-  const transaction = await crearTransaccion(prisma, {
-    monto: Number(cargo.monto), cuentaId: cargo.resumen.cuentaId, categoriaId: "cat-deudas",
-    origen: OrigenTransaccion.RESUMEN_CONFIRMADO, idempotencyKey: `cargo-resumen-${cargo.id}`,
-    fecha: `${cargo.resumen.periodo}-28`, estado: "CONFIRMADA",
-  });
-  return prisma.cargoResumen.update({ where: { id: cargoId }, data: { estado: "CONFIRMADO", transaccionId: transaction.id } });
+  return prisma.cargoResumen.update({ where: { id: cargoId }, data: { estado: "CONFIRMADO" } });
 }

@@ -9,14 +9,14 @@ async function run() {
   const prisma = new PrismaClient();
   try {
     const cuenta = await prisma.cuenta.create({
-      data: { nombre: "Cuenta OCR Test", tipo: "EFECTIVO", saldoInicial: "0" },
+      data: { nombre: "Cuenta OCR Test", tipo: "EFECTIVO", saldoInicial: "500" },
     });
 
     const key1 = "ocr-key-1-" + Date.now();
     const key2 = "ocr-key-2-" + Date.now();
     const entityName = "EntidadOCR" + Date.now();
     const entidad = await prisma.cuenta.create({
-      data: { nombre: "Mercado Pago OCR", nombreEntidad: entityName, tipo: "BILLETERA_VIRTUAL", saldoInicial: "0" },
+      data: { nombre: "Mercado Pago OCR", nombreEntidad: entityName, tipo: "BILLETERA_VIRTUAL", saldoInicial: "100" },
     });
 
     const confirmed = await crearTransaccionOCR(prisma, {
@@ -93,10 +93,10 @@ async function run() {
       cuentaAfter?.saldoInicial.toString(),
     );
     console.log("saldo calculado after correction:", saldo);
-    if (cuentaAfter?.saldoInicial.toString() !== "0") {
+    if (cuentaAfter?.saldoInicial.toString() !== "500") {
       throw new Error("Expected saldoInicial to remain immutable after OCR flow");
     }
-    if (saldo !== -350) {
+    if (saldo !== 150) {
       throw new Error(
         "Expected calculated saldo to reflect confirmed and corrected OCR transactions",
       );

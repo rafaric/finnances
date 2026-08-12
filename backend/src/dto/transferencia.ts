@@ -8,6 +8,7 @@ export interface TransferenciaResponseDTO {
   monto: number;
   fecha: string;
   nota?: string;
+  createdAt?: string;
 }
 
 export interface TransferenciaWithCuentas
@@ -34,5 +35,6 @@ export function toTransferenciaDTO({
     monto: Number(transferencia.monto),
     fecha: transferencia.fecha.toISOString(),
     nota: transferencia.nota ?? undefined,
+    createdAt: transferencia.createdAt.toISOString(),
   };
 }

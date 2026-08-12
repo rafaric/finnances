@@ -5,6 +5,7 @@ export interface CuotaResponseDTO {
   compraId: string;
   numeroCuota: number;
   monto: number;
+  moneda: string;
   fechaImputacion: string;
   estado: EstadoCuota;
   transaccionId?: string;
@@ -13,6 +14,7 @@ export interface CuotaResponseDTO {
 export interface CompraResponseDTO {
   id: string;
   montoTotal: number;
+  moneda: string;
   comercio: string;
   fechaCompra: string;
   cantidadCuotas: number;
@@ -26,6 +28,7 @@ export function toCuotaDTO(cuota: Cuota): CuotaResponseDTO {
     compraId: cuota.compraId,
     numeroCuota: cuota.numeroCuota,
     monto: Number(cuota.monto),
+    moneda: cuota.moneda,
     fechaImputacion: cuota.fechaImputacion.toISOString(),
     estado: cuota.estado,
     transaccionId: cuota.transaccionId ?? undefined,
@@ -36,6 +39,7 @@ export function toCompraDTO(compra: Compra & { cuotas: Cuota[] }): CompraRespons
   return {
     id: compra.id,
     montoTotal: Number(compra.montoTotal),
+    moneda: compra.moneda,
     comercio: compra.comercio,
     fechaCompra: compra.fechaCompra.toISOString(),
     cantidadCuotas: compra.cantidadCuotas,

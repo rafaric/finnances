@@ -8,6 +8,7 @@ export interface IngresoResponseDTO {
   moneda: string;
   fechaCobro: string;
   periodoDisponible: string;
+  iniciaCicloFinanciero: boolean;
   categoria: CategoriaResponseDTO;
   subcategoria?: SubcategoriaResponseDTO;
   cuenta: CuentaResumenDTO;
@@ -25,6 +26,7 @@ export function toIngresoDTO(ingreso: IngresoConCategoria, cuenta: CuentaResumen
     moneda: "ARS",
     fechaCobro: ingreso.fechaCobro.toISOString(),
     periodoDisponible: ingreso.periodoDisponible,
+    iniciaCicloFinanciero: ingreso.iniciaCicloFinanciero,
     categoria: {
       id: ingreso.categoria.id,
       nombre: ingreso.categoria.nombre,

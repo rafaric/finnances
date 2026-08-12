@@ -1,17 +1,19 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { listTransacciones, listCategorias } from "../../api/client";
+import { listCategorias, listTransferencias, listTransacciones } from "../../api/client";
 import type { CuentaResponseDTO, CategoriaResponseDTO, PaginatedResponseDTO, TransaccionResponseDTO } from "../../api/types";
 import { Movimientos } from "./Movimientos";
 
 vi.mock("../../api/client", () => ({
   listTransacciones: vi.fn(),
   listCategorias: vi.fn(),
+  listTransferencias: vi.fn(),
 }));
 
 const listTransaccionesMock = vi.mocked(listTransacciones);
 const listCategoriasMock = vi.mocked(listCategorias);
+const listTransferenciasMock = vi.mocked(listTransferencias);
 const account: CuentaResponseDTO = {
   id: "account-1",
   nombre: "Cuenta principal",
@@ -71,6 +73,7 @@ beforeEach(() => {
   listTransaccionesMock.mockReset();
   listTransaccionesMock.mockResolvedValue(pageResult(1, true));
   listCategoriasMock.mockResolvedValue([categoriaComida, categoriaTransporte]);
+  listTransferenciasMock.mockResolvedValue([]);
 });
 
 describe("Movimientos", () => {

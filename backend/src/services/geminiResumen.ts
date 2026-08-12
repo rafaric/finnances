@@ -8,13 +8,18 @@ const GeminiResumenSchema = z.object({
     monto: z.number().nonnegative(),
     cuotaActual: z.number().int().positive().nullable(),
     cuotasTotales: z.number().int().positive().nullable(),
+    moneda: z.enum(["ARS", "USD"]).default("ARS"),
   })),
   entidad: z.string().min(1).nullable(),
   ultimosDigitos: z.string().regex(/^\d{4}$/).nullable(),
   periodo: z.string().regex(/^\d{4}-\d{2}$/).nullable(),
+  fechaCierre: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
+  fechaVencimiento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
   montoTotal: z.number().nonnegative().nullable(),
   montoMinimo: z.number().nonnegative().nullable(),
   totalConsumos: z.number().nonnegative().nullable(),
+  totalConsumosUSD: z.number().nonnegative().nullable(),
+  saldoUSD: z.number().nonnegative().nullable(),
   saldoFinanciado: z.number().nonnegative().nullable(),
   intereses: z.number().nonnegative().nullable(),
   impuestos: z.number().nonnegative().nullable(),
@@ -33,15 +38,19 @@ const responseJsonSchema = {
   type: "object",
   properties: {
     consumos: { type: "array", items: { type: "object", properties: {
-      fecha: { type: ["string", "null"] }, comercio: { type: ["string", "null"] }, monto: { type: "number" },
+       fecha: { type: ["string", "null"] }, comercio: { type: ["string", "null"] }, monto: { type: "number" }, moneda: { type: "string", enum: ["ARS", "USD"] },
       cuotaActual: { type: ["integer", "null"] }, cuotasTotales: { type: ["integer", "null"] },
     }, required: ["fecha", "comercio", "monto", "cuotaActual", "cuotasTotales"] } },
     entidad: { type: ["string", "null"] },
     ultimosDigitos: { type: ["string", "null"] },
     periodo: { type: ["string", "null"] },
+    fechaCierre: { type: ["string", "null"] },
+    fechaVencimiento: { type: ["string", "null"] },
     montoTotal: { type: ["number", "null"] },
     montoMinimo: { type: ["number", "null"] },
     totalConsumos: { type: ["number", "null"] },
+    totalConsumosUSD: { type: ["number", "null"] },
+    saldoUSD: { type: ["number", "null"] },
     saldoFinanciado: { type: ["number", "null"] },
     intereses: { type: ["number", "null"] },
     impuestos: { type: ["number", "null"] },
@@ -54,8 +63,8 @@ const responseJsonSchema = {
     confianza: { type: "number" },
   },
   required: [
-    "consumos", "entidad", "ultimosDigitos", "periodo", "montoTotal", "montoMinimo",
-    "totalConsumos", "saldoFinanciado", "intereses", "impuestos", "comisiones",
+    "consumos", "entidad", "ultimosDigitos", "periodo", "fechaCierre", "fechaVencimiento", "montoTotal", "montoMinimo",
+    "totalConsumos", "totalConsumosUSD", "saldoUSD", "saldoFinanciado", "intereses", "impuestos", "comisiones",
     "seguros", "ivaIntereses", "ivaComisiones", "ivaImpuestos", "impuestoSello", "confianza",
   ],
 };
@@ -82,7 +91,7 @@ export async function analizarResumenConGemini(pdf: RenderedPdf): Promise<Gemini
   const client = new GoogleGenAI({ apiKey });
   const parts = [
     {
-      text: "Analizá estas páginas de un resumen de tarjeta argentino. Extraé únicamente datos visibles. No inventes ni sumes valores. Extraé cada fila de consumo individual del bloque de movimientos, ignorando SALDO ANTERIOR, PAGOS, TOTALES, cargos financieros, límites y cuotas futuras. Para cada consumo devolvé fecha, comercio, monto positivo y número de cuota actual/total si aparece como 6/9. Los importes deben ser números positivos en pesos argentinos. El período debe tener formato YYYY-MM. ultimosDigitos debe contener exactamente los últimos cuatro dígitos si aparecen. Extraé por separado cada línea si aparece: intereses, impuestos generales, comisiones, seguros, IVA INTERESES, IVA COMISIONES, IVA sobre impuestos y IMPUESTO AL SELLO. No mezcles IVA COMISIONES o IVA INTERESES dentro del importe base. confianza debe representar tu confianza global entre 0 y 1. Si un dato no aparece, devolvé null.",
+      text: "Analizá estas páginas de un resumen de tarjeta argentino. Extraé únicamente datos visibles. No inventes ni sumes valores. Extraé fecha de cierre y fecha de vencimiento completas como YYYY-MM-DD; son obligatorias si están impresas y determinan el período contable del resumen. Extraé cada fila de consumo individual del bloque de movimientos, ignorando SALDO ANTERIOR, PAGOS, TOTALES, cargos financieros, límites y cuotas futuras. Para cada consumo devolvé fecha, comercio, monto positivo, moneda (ARS o USD) y número de cuota actual/total si aparece como 6/9. Conservá la moneda impresa: no conviertas USD a ARS. Extraé por separado el total de consumos en pesos (totalConsumos), el total de consumos en dólares (totalConsumosUSD) y el saldo actual en dólares (saldoUSD), si aparecen. El período debe tener formato YYYY-MM como respaldo. ultimosDigitos debe contener exactamente los últimos cuatro dígitos si aparecen. Extraé por separado cada línea si aparece: intereses, impuestos generales, comisiones, seguros, IVA INTERESES, IVA COMISIONES, IVA sobre impuestos y IMPUESTO AL SELLO. No mezcles IVA COMISIONES o IVA INTERESES dentro del importe base. confianza debe representar tu confianza global entre 0 y 1. Si un dato no aparece, devolvé null.",
     },
     ...pdf.pages.map((page) => ({
       inlineData: { mimeType: page.mimeType, data: page.data.toString("base64") },

@@ -20,8 +20,8 @@ async function run() {
 
     if (first.length !== 1 || second.length !== 0 || payments.length !== 1) throw new Error("automatic debit is not idempotent");
     if (Number(payments[0].monto) !== 100) throw new Error("minimum payment mismatch");
-    if (cuota?.estado !== "CONFIRMADO" || !cuota.transaccionId) throw new Error("quota was not confirmed");
-    console.log("✓ automatic minimum debit is scoped and idempotent");
+    if (cuota?.estado !== "PROYECTADO" || cuota.transaccionId) throw new Error("minimum payment should not confirm quota");
+    console.log("✓ automatic minimum debit is scoped, idempotent and does not confirm quotas");
   } finally {
     await prisma.$disconnect();
   }

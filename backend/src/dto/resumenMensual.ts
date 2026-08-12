@@ -12,6 +12,13 @@ export interface GastoCategoriaDTO {
   categoria: CategoriaDTO;
   monto: number;
   porcentaje: number;
+  subcategorias?: GastoSubcategoriaDTO[];
+}
+
+export interface GastoSubcategoriaDTO {
+  subcategoria: { id: string; nombre: string };
+  monto: number;
+  porcentaje: number;
 }
 
 export interface ResumenMensualDTO {
@@ -42,6 +49,7 @@ export function toResumenMensualDTO(data: ResumenMensualData): ResumenMensualDTO
       },
       monto: g.monto,
       porcentaje: g.porcentaje,
+      subcategorias: g.subcategorias,
     })),
     disponibleLiquido: data.disponibleLiquido,
     deudaTarjetas: data.deudaTarjetas,

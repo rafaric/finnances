@@ -10,19 +10,22 @@ function normalizeText(value: string): string {
 async function conciliarConsumos(prisma: PrismaClient, cuentaId: string, periodo: string, consumos: GeminiResumen["consumos"]): Promise<ConsumoConciliado[]> {
   const { start, end } = monthBounds(periodo);
   const cuotas = await prisma.cuota.findMany({
-    where: { compra: { cuentaId }, fechaImputacion: { gte: start, lt: end }, estado: { not: "OMITIDO" } },
-    include: { compra: { select: { id: true, comercio: true, cantidadCuotas: true } } },
+    where: { compra: { cuentaId }, estado: { not: "OMITIDO" } },
+    include: { compra: { select: { id: true, comercio: true, cantidadCuotas: true, moneda: true } } },
   });
+  const cuotasDelPeriodo = new Set(cuotas.filter((cuota) => cuota.fechaImputacion >= start && cuota.fechaImputacion < end).map((cuota) => cuota.id));
   const used = new Set<string>();
   return consumos.map((consumo) => {
-    const match = cuotas.find((cuota) => {
-      if (used.has(cuota.id) || Math.abs(Number(cuota.monto) - consumo.monto) >= 0.01) return false;
-      if (consumo.cuotaActual && cuota.numeroCuota !== consumo.cuotaActual) return false;
+    const candidates = cuotas.filter((cuota) => {
+      if (used.has(cuota.id) || cuota.moneda !== consumo.moneda || Math.abs(Number(cuota.monto) - consumo.monto) >= 0.01) return false;
       if (consumo.cuotasTotales && cuota.compra.cantidadCuotas !== consumo.cuotasTotales) return false;
       const merchant = normalizeText(consumo.comercio ?? "");
       const purchaseMerchant = normalizeText(cuota.compra.comercio);
       return Boolean(merchant && purchaseMerchant && (merchant.includes(purchaseMerchant) || purchaseMerchant.includes(merchant)));
     });
+    const match = candidates.find((cuota) => cuotasDelPeriodo.has(cuota.id) && (!consumo.cuotaActual || cuota.numeroCuota === consumo.cuotaActual))
+      ?? candidates.find((cuota) => cuotasDelPeriodo.has(cuota.id))
+      ?? candidates.find((cuota) => !consumo.cuotaActual || cuota.numeroCuota === consumo.cuotaActual);
     if (!match) return { ...consumo, estado: "SIN_REGISTRAR" as const };
     used.add(match.id);
     return { ...consumo, estado: "COINCIDE" as const, cuotaId: match.id, compraId: match.compra.id };
@@ -51,15 +54,16 @@ export async function crearResumenDesdeGemini(
   if (cuenta.ultimosDigitos && extracted.ultimosDigitos && cuenta.ultimosDigitos !== extracted.ultimosDigitos) {
     throw new Error("Los últimos dígitos no coinciden con la tarjeta seleccionada");
   }
-  const existing = await prisma.resumen.findUnique({ where: { cuentaId_periodo: { cuentaId, periodo: extracted.periodo } } });
+  const periodo = extracted.fechaVencimiento?.slice(0, 7) ?? extracted.periodo;
+  const existing = await prisma.resumen.findFirst({ where: { cuentaId, periodo: { in: [periodo, extracted.periodo] } }, orderBy: { id: "asc" } });
 
-  const { start, end } = monthBounds(extracted.periodo);
-  const consumos = await conciliarConsumos(prisma, cuentaId, extracted.periodo, extracted.consumos);
+  const { start, end } = monthBounds(periodo);
+  const consumos = await conciliarConsumos(prisma, cuentaId, periodo, extracted.consumos);
   const cuotas = await prisma.cuota.findMany({
     where: { compra: { cuentaId }, fechaImputacion: { gte: start, lt: end }, estado: { not: "OMITIDO" } },
-    select: { monto: true },
+    select: { monto: true, moneda: true },
   });
-  const cuotasTotal = cuotas.reduce((total, cuota) => total + Number(cuota.monto), 0);
+  const cuotasTotal = cuotas.reduce((total, cuota) => total + (cuota.moneda === "ARS" ? Number(cuota.monto) : 0), 0);
   const diferencia = extracted.totalConsumos == null ? null : Number((extracted.totalConsumos - cuotasTotal).toFixed(2));
   const estadoConciliacion = diferencia == null
     ? EstadoConciliacion.PENDIENTE
@@ -67,10 +71,14 @@ export async function crearResumenDesdeGemini(
 
   const summaryData = {
       cuentaId,
-      periodo: extracted.periodo,
+      periodo,
+      fechaCierre: extracted.fechaCierre ? new Date(`${extracted.fechaCierre}T00:00:00.000Z`) : null,
+      fechaVencimiento: extracted.fechaVencimiento ? new Date(`${extracted.fechaVencimiento}T00:00:00.000Z`) : null,
       montoTotalInformado: extracted.montoTotal,
       montoMinimoInformado: extracted.montoMinimo,
       totalConsumosInformado: extracted.totalConsumos,
+      totalConsumosUSDInformado: extracted.totalConsumosUSD,
+      saldoUSDInformado: extracted.saldoUSD,
       saldoFinanciado: extracted.saldoFinanciado ?? 0,
       entidadInformada: extracted.entidad,
       ultimosDigitosInformados: extracted.ultimosDigitos,
@@ -111,9 +119,9 @@ export async function reconciliarResumen(prisma: PrismaClient, resumenId: string
   const { start, end } = monthBounds(resumen.periodo);
   const cuotas = await prisma.cuota.findMany({
     where: { compra: { cuentaId: resumen.cuentaId }, fechaImputacion: { gte: start, lt: end }, estado: { not: "OMITIDO" } },
-    select: { monto: true },
+    select: { monto: true, moneda: true },
   });
-  const total = cuotas.reduce((sum, cuota) => sum + Number(cuota.monto), 0);
+  const total = cuotas.reduce((sum, cuota) => sum + (cuota.moneda === "ARS" ? Number(cuota.monto) : 0), 0);
   const extractedRows = Array.isArray(resumen.consumosExtraidos) ? resumen.consumosExtraidos : [];
   const consumosExtraidos = extractedRows.length
     ? await conciliarConsumos(prisma, resumen.cuentaId, resumen.periodo, extractedRows as GeminiResumen["consumos"])

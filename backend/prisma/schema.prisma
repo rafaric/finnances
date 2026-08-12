@@ -38,11 +38,22 @@ model Cuenta {
   pagosResumen         PagoResumen[]           @relation("CuentaPagoResumen")
 }
 
+model CicloFinanciero {
+  id        String   @id @default(cuid())
+  periodo   String   @unique
+  inicio    DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([inicio])
+}
+
 model Ingreso {
   id                String   @id @default(cuid())
   monto             Decimal  @db.Decimal(10, 2)
   fechaCobro        DateTime
   periodoDisponible String
+  iniciaCicloFinanciero Boolean @default(false)
   cuentaId          String
   categoriaId       String
   categoria         Categoria @relation(fields: [categoriaId], references: [id])
@@ -92,6 +103,7 @@ model Transaccion {
   montoUSD                 Decimal?
   cotizacionUsada          Decimal?
   comercio                 String?
+  nota                     String?                   @db.VarChar(120)
   origen                   OrigenTransaccion
   cuentaId                 String?
   subcategoriaId           String?
@@ -113,6 +125,7 @@ model Transaccion {
 model Compra {
   id             String   @id @default(cuid())
   montoTotal     Decimal  @db.Decimal(10, 2)
+  moneda         String   @default("ARS")
   comercio       String
   fechaCompra    DateTime
   cantidadCuotas Int      @default(1)
@@ -128,6 +141,7 @@ model Cuota {
   compraId        String
   numeroCuota     Int
   monto           Decimal      @db.Decimal(10, 2)
+  moneda          String       @default("ARS")
   fechaImputacion DateTime
   estado          EstadoCuota  @default(PROYECTADO)
   transaccionId   String?      @unique
@@ -142,9 +156,13 @@ model Resumen {
   id                     String               @id @default(cuid())
   cuentaId               String
   periodo                String
+  fechaCierre            DateTime?
+  fechaVencimiento       DateTime?
   montoTotalInformado    Decimal              @db.Decimal(10, 2)
   montoMinimoInformado   Decimal              @db.Decimal(10, 2)
   totalConsumosInformado Decimal?
+  totalConsumosUSDInformado Decimal?
+  saldoUSDInformado      Decimal?
   montoPagado            Decimal?
   fechaPago              DateTime?
   saldoFinanciado        Decimal              @default(0)

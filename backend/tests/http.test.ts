@@ -90,6 +90,7 @@ async function run() {
   });
 
   let cuenta: any;
+  let walletTransactionId = "";
 
   // 1. GET /health — no auth required
   {
@@ -179,6 +180,13 @@ async function run() {
     if (body.categoria.id !== "cat-otros") throw new Error("categoria mismatch");
     if (body.estado !== "CONFIRMADA") throw new Error("estado should be CONFIRMADA");
     if (body.cuenta.saldoActual !== 850) throw new Error(`saldoActual should be 850, got ${body.cuenta.saldoActual}`);
+    const rejected = await app.inject({
+      method: "POST", url: "/api/v1/gastos", headers: AUTH,
+      payload: { monto: "1000", cuentaId: cuenta.id, categoriaId: "cat-otros", origen: "MANUAL", idempotencyKey: `overdraft-${ts}` },
+    });
+    if (rejected.statusCode !== 400 || rejected.json().message !== "Saldo insuficiente para registrar el gasto") {
+      throw new Error(`overdraft expense should be rejected, got ${rejected.statusCode} — ${rejected.body}`);
+    }
     console.log("✓ POST /api/v1/gastos — TransaccionResponseDTO shape + values");
   }
 
@@ -190,10 +198,35 @@ async function run() {
     const second = await app.inject({ method: "POST", url: "/api/v1/gastos/wallet", headers: AUTH, payload });
     if (second.statusCode !== first.statusCode || second.json().id !== first.json().id) throw new Error("Wallet retry should be idempotent");
     if (first.json().origen !== "APPLE_PAY") throw new Error("Wallet origin should be APPLE_PAY");
+    walletTransactionId = first.json().id;
+    const blocked = await app.inject({ method: "DELETE", url: `/api/v1/transacciones/${walletTransactionId}`, headers: AUTH });
+    if (blocked.statusCode !== 400) throw new Error("Apple Pay expense should not be deletable");
     console.log("✓ POST /api/v1/gastos/wallet — matching and idempotency");
   }
 
   // 5b. GET /api/v1/transacciones — PaginatedResponseDTO shape + filters
+
+  // 5c. PATCH/DELETE /api/v1/transacciones/:id — editable manual expense lifecycle
+  {
+    const created = await app.inject({
+      method: "POST", url: "/api/v1/gastos", headers: AUTH,
+      payload: { monto: "40", cuentaId: cuenta.id, categoriaId: "cat-comida", origen: "MANUAL", idempotencyKey: `editable-${ts}` },
+    });
+    const transaction = created.json();
+    const edited = await app.inject({
+      method: "PATCH", url: `/api/v1/transacciones/${transaction.id}`, headers: AUTH,
+      payload: { monto: "60", categoriaId: "cat-comida", subcategoriaId: "invalid-subcategory", fecha: "2026-08-05" },
+    });
+    if (edited.statusCode !== 400) throw new Error(`invalid subcategory should return 400, got ${edited.statusCode}`);
+    const validEdit = await app.inject({
+      method: "PATCH", url: `/api/v1/transacciones/${transaction.id}`, headers: AUTH,
+      payload: { monto: "60", categoriaId: "cat-comida", fecha: "2026-08-05" },
+    });
+    if (validEdit.statusCode !== 200 || validEdit.json().monto !== -60) throw new Error("manual expense edit failed");
+    const removed = await app.inject({ method: "DELETE", url: `/api/v1/transacciones/${transaction.id}`, headers: AUTH });
+    if (removed.statusCode !== 204) throw new Error(`manual expense delete failed: ${removed.statusCode}`);
+    console.log("✓ PATCH/DELETE transactions — manual editable");
+  }
 
   // 5b. GET /api/v1/transacciones — PaginatedResponseDTO shape + filters
   {

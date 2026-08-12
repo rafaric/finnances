@@ -1,5 +1,6 @@
 import { EstadoTransaccion, PrismaClient, TipoCuenta } from "@prisma/client";
 import calcularSaldo from "./saldo";
+import { obtenerRangoCiclo } from "./cicloFinanciero";
 
 type CategoriaConNombre = {
   id: string;
@@ -11,6 +12,13 @@ type CategoriaConNombre = {
 
 export interface GastoCategoriaData {
   categoria: CategoriaConNombre;
+  monto: number;
+  porcentaje: number;
+  subcategorias?: GastoSubcategoriaData[];
+}
+
+export interface GastoSubcategoriaData {
+  subcategoria: { id: string; nombre: string };
   monto: number;
   porcentaje: number;
 }
@@ -32,9 +40,7 @@ export async function calcularResumenMensual(
   prisma: PrismaClient,
   periodo: string, // YYYY-MM
 ): Promise<ResumenMensualData> {
-  const start = new Date(`${periodo}-01T00:00:00.000Z`);
-  const end = new Date(start);
-  end.setUTCMonth(end.getUTCMonth() + 1);
+  const { start, end } = await obtenerRangoCiclo(prisma, periodo);
 
   const [transacciones, ingresos, cuentas, cuotasProyectadas] = await Promise.all([
     prisma.transaccion.findMany({
@@ -42,7 +48,7 @@ export async function calcularResumenMensual(
         estado: EstadoTransaccion.CONFIRMADA,
         fecha: { gte: start, lt: end },
       },
-      include: { categoria: true },
+        include: { categoria: true, subcategoria: true },
     }),
     prisma.ingreso.findMany({
       where: { periodoDisponible: periodo },
@@ -63,7 +69,7 @@ export async function calcularResumenMensual(
   const ingresosTotal = ingresos.reduce((acc, i) => acc + Number(i.monto), 0);
 
   // gastos por categoria
-  const porCategoria = new Map<string, { categoria: CategoriaConNombre; monto: number }>();
+  const porCategoria = new Map<string, { categoria: CategoriaConNombre; monto: number; subcategorias: Map<string, { nombre: string; monto: number }> }>();
   for (const t of transacciones) {
     const m = Number(t.monto);
     if (m < 0 && t.categoria) {
@@ -71,7 +77,7 @@ export async function calcularResumenMensual(
       if (existing) {
         existing.monto += Math.abs(m);
       } else {
-        porCategoria.set(t.categoria.id, {
+          porCategoria.set(t.categoria.id, {
           categoria: {
             id: t.categoria.id,
             nombre: t.categoria.nombre,
@@ -79,17 +85,27 @@ export async function calcularResumenMensual(
             color: t.categoria.color,
             tipo: t.categoria.tipo,
           },
-          monto: Math.abs(m),
-        });
+            monto: Math.abs(m),
+            subcategorias: new Map(),
+          });
+        }
+        if (t.subcategoria) {
+          const category = porCategoria.get(t.categoria.id)!;
+          const subcategory = category.subcategorias.get(t.subcategoria.id);
+          if (subcategory) subcategory.monto += Math.abs(m);
+          else category.subcategorias.set(t.subcategoria.id, { nombre: t.subcategoria.nombre, monto: Math.abs(m) });
+        }
       }
-    }
   }
 
   const gastosPorCategoria: GastoCategoriaData[] = Array.from(porCategoria.values())
-    .map(({ categoria, monto }) => ({
+    .map(({ categoria, monto, subcategorias }) => ({
       categoria,
       monto: Number(monto.toFixed(2)),
       porcentaje: gastosTotal > 0 ? Number(((monto / gastosTotal) * 100).toFixed(2)) : 0,
+      subcategorias: Array.from(subcategorias.entries())
+        .map(([id, subcategoria]) => ({ subcategoria: { id, nombre: subcategoria.nombre }, monto: Number(subcategoria.monto.toFixed(2)), porcentaje: monto > 0 ? Number(((subcategoria.monto / monto) * 100).toFixed(2)) : 0 }))
+        .sort((a, b) => b.monto - a.monto),
     }))
     .sort((a, b) => b.monto - a.monto);
 

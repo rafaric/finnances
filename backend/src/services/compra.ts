@@ -8,9 +8,10 @@ const CrearCompraSchema = z.object({
   cantidadCuotas: z.number().int().min(1).max(120).default(1),
   cuentaId: z.string(),
   categoriaId: z.string().optional(),
+  moneda: z.enum(["ARS", "USD"]).default("ARS"),
 });
 
-export type CrearCompraInput = z.infer<typeof CrearCompraSchema>;
+export type CrearCompraInput = z.input<typeof CrearCompraSchema>;
 
 function parseAmount(value: string | number): number {
   const amount = typeof value === "number" ? value : Number(value.replace(",", "."));
@@ -57,12 +58,14 @@ export async function crearCompra(prisma: PrismaClient, input: CrearCompraInput)
   const cuotas = Array.from({ length: data.cantidadCuotas }, (_, index) => ({
     numeroCuota: index + 1,
     monto: (montoTotal / data.cantidadCuotas).toFixed(2),
+    moneda: data.moneda,
     fechaImputacion: addMonths(firstInstallmentDate(fechaCompra, cuenta.diaCierre, cuenta.diaPago), index),
   }));
 
   return prisma.compra.create({
     data: {
       montoTotal: montoTotal.toFixed(2),
+      moneda: data.moneda,
       comercio: data.comercio,
       fechaCompra,
       cantidadCuotas: data.cantidadCuotas,

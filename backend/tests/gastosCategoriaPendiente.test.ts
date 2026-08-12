@@ -12,7 +12,7 @@ async function run() {
       data: {
         nombre: "Cuenta OCR Categoria",
         tipo: "EFECTIVO",
-        saldoInicial: "0",
+        saldoInicial: "150",
       },
     });
 
@@ -75,10 +75,10 @@ async function run() {
       cuentaAfter.saldoInicial.toString(),
     );
     console.log("saldo calculado after resolve:", saldo);
-    if (cuentaAfter.saldoInicial.toString() !== "0") {
+    if (cuentaAfter.saldoInicial.toString() !== "150") {
       throw new Error("Expected saldoInicial to remain immutable after resolve");
     }
-    if (saldo !== -100) {
+    if (saldo !== 50) {
       throw new Error(
         "Expected calculated saldo to include resolved pending category transaction",
       );

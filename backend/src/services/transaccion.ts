@@ -6,6 +6,7 @@ import {
   OrigenTransaccion,
   EstadoTransaccion,
   TipoCategoria,
+  TipoCuenta,
 } from "@prisma/client";
 import { z } from "zod";
 import { interpretarConGemini } from "./geminiOCR";
@@ -20,6 +21,7 @@ const TransaccionSchema = z.object({
   idempotencyKey: z.string(),
   fecha: z.string().optional(),
   comercio: z.string().optional(),
+  nota: z.string().max(120).optional(),
   cuotaId: z.string().optional(),
   estado: z.nativeEnum(EstadoTransaccion).optional(),
   textoCrudoOCR: z.string().optional(),
@@ -146,6 +148,29 @@ export function normalizarMontoGasto(value: string | number): string {
   }
 
   return (-Math.abs(Number(normalized))).toFixed(2);
+}
+
+async function assertSufficientFunds(
+  tx: Prisma.TransactionClient,
+  cuentaId: string,
+  gasto: string,
+  fecha: Date,
+) {
+  const cuenta = await tx.cuenta.findUnique({ where: { id: cuentaId }, select: { tipo: true, saldoInicial: true } });
+  if (!cuenta) throw new Error("Cuenta no encontrada");
+  if (cuenta.tipo === TipoCuenta.TARJETA_CREDITO) return;
+  const [transacciones, ingresos, salientes, entrantes] = await Promise.all([
+    tx.transaccion.findMany({ where: { cuentaId, estado: EstadoTransaccion.CONFIRMADA, fecha: { lte: fecha } }, select: { monto: true } }),
+    tx.ingreso.findMany({ where: { cuentaId, fechaCobro: { lte: fecha } }, select: { monto: true } }),
+    tx.transferenciaInterna.findMany({ where: { cuentaOrigenId: cuentaId, fecha: { lte: fecha } }, select: { monto: true } }),
+    tx.transferenciaInterna.findMany({ where: { cuentaDestinoId: cuentaId, fecha: { lte: fecha } }, select: { monto: true } }),
+  ]);
+  const saldo = Number(cuenta.saldoInicial)
+    + transacciones.reduce((sum, item) => sum + Number(item.monto), 0)
+    + ingresos.reduce((sum, item) => sum + Number(item.monto), 0)
+    - salientes.reduce((sum, item) => sum + Number(item.monto), 0)
+    + entrantes.reduce((sum, item) => sum + Number(item.monto), 0);
+  if (saldo + Number(gasto) < 0) throw new Error("Saldo insuficiente para registrar el gasto");
 }
 
 function extractCurrencyAmount(text: string): string | undefined {
@@ -295,6 +320,8 @@ export async function crearTransaccion(
         : normalizarMontoGasto(data.monto);
 
   const result = await prisma.$transaction(async (tx) => {
+    const fecha = data.fecha ? new Date(data.fecha) : new Date();
+    if (estado === EstadoTransaccion.CONFIRMADA && data.cuentaId) await assertSufficientFunds(tx, data.cuentaId, monto, fecha);
     const created = await tx.transaccion.create({
       data: {
         monto,
@@ -305,7 +332,8 @@ export async function crearTransaccion(
         subcategoriaId: data.subcategoriaId,
         idempotencyKey: data.idempotencyKey,
         comercio: data.comercio,
-        fecha: data.fecha ? new Date(data.fecha) : new Date(),
+        nota: data.nota,
+        fecha,
         estado,
         textoCrudoOCR: data.textoCrudoOCR,
         esTransferenciaAPersona: data.esTransferenciaAPersona ?? false,
@@ -397,24 +425,29 @@ export async function crearTransferenciaInterna(
       throw new Error("Cuenta origen o destino no encontrada");
     }
 
-    const [transacciones, salientes, entrantes] = await Promise.all([
+    const [transacciones, salientes, entrantes, ingresos] = await Promise.all([
       tx.transaccion.findMany({
-        where: { cuentaId: data.cuentaOrigenId, estado: EstadoTransaccion.CONFIRMADA },
+        where: { cuentaId: data.cuentaOrigenId, estado: EstadoTransaccion.CONFIRMADA, ...(parsedFecha ? { fecha: { lte: new Date(parsedFecha) } } : {}) },
         select: { monto: true },
       }),
       tx.transferenciaInterna.findMany({
-        where: { cuentaOrigenId: data.cuentaOrigenId },
+        where: { cuentaOrigenId: data.cuentaOrigenId, ...(parsedFecha ? { fecha: { lte: new Date(parsedFecha) } } : {}) },
         select: { monto: true },
       }),
       tx.transferenciaInterna.findMany({
-        where: { cuentaDestinoId: data.cuentaOrigenId },
+        where: { cuentaDestinoId: data.cuentaOrigenId, ...(parsedFecha ? { fecha: { lte: new Date(parsedFecha) } } : {}) },
+        select: { monto: true },
+      }),
+      tx.ingreso.findMany({
+        where: { cuentaId: data.cuentaOrigenId, ...(parsedFecha ? { fechaCobro: { lte: new Date(parsedFecha) } } : {}) },
         select: { monto: true },
       }),
     ]);
     const saldoDisponible = Number(origenCuenta.saldoInicial)
       + transacciones.reduce((sum, item) => sum + Number(item.monto), 0)
       - salientes.reduce((sum, item) => sum + Number(item.monto), 0)
-      + entrantes.reduce((sum, item) => sum + Number(item.monto), 0);
+      + entrantes.reduce((sum, item) => sum + Number(item.monto), 0)
+      + ingresos.reduce((sum, item) => sum + Number(item.monto), 0);
 
     if (Number(normalizedMonto) > saldoDisponible) {
       throw new Error("Saldo insuficiente para la transferencia");
@@ -479,6 +512,7 @@ export async function corregirTransaccionOCR(
   if (shouldConfirm && !cuentaId) throw new Error("No se puede confirmar una transaccion sin cuenta");
 
   const updated = await prisma.$transaction(async (tx) => {
+    if (shouldConfirm && cuentaId) await assertSufficientFunds(tx, cuentaId, normalizedMonto, fecha);
     return tx.transaccion.update({
       where: { id: transaccion.id },
       data: {
@@ -505,6 +539,74 @@ const ResolverCategoriaSchema = z.object({
   cuentaId: z.string().optional(),
   subcategoriaId: z.string().optional(),
 });
+
+const EditarGastoSchema = z.object({
+  monto: z.string().or(z.number()).optional(),
+  cuentaId: z.string().optional(),
+  categoriaId: z.string().optional(),
+  subcategoriaId: z.string().nullable().optional(),
+  comercio: z.string().max(60).nullable().optional(),
+  nota: z.string().max(120).nullable().optional(),
+  fecha: z.string().optional(),
+});
+
+export type EditarGastoInput = z.infer<typeof EditarGastoSchema>;
+
+const EDITABLE_EXPENSE_ORIGINS: Set<OrigenTransaccion> = new Set([OrigenTransaccion.MANUAL, OrigenTransaccion.OCR_IA]);
+
+async function assertEditableExpense(prisma: PrismaClient, transaccionId: string) {
+  const transaction = await prisma.transaccion.findUnique({
+    where: { id: transaccionId },
+    include: { cuota: true, cargoResumen: true, instanciaGastoRecurrente: true },
+  });
+  if (!transaction) throw new Error("Transaccion no encontrada");
+  if (!EDITABLE_EXPENSE_ORIGINS.has(transaction.origen)) throw new Error("Este movimiento se gestiona desde su sección de origen");
+  if (transaction.cuota || transaction.cargoResumen || transaction.instanciaGastoRecurrente) {
+    throw new Error("Este movimiento se gestiona desde su sección de origen");
+  }
+  return transaction;
+}
+
+export async function editarGasto(prisma: PrismaClient, transaccionId: string, input: EditarGastoInput) {
+  const data = EditarGastoSchema.parse(input);
+  const transaction = await assertEditableExpense(prisma, transaccionId);
+  const categoriaId = data.categoriaId ?? transaction.categoriaId;
+  const categoria = await prisma.categoria.findUnique({ where: { id: categoriaId } });
+  if (!categoria || categoria.tipo !== TipoCategoria.GASTO) throw new Error("La categoría debe ser de gasto");
+
+  const subcategoriaId = data.subcategoriaId === undefined ? transaction.subcategoriaId : data.subcategoriaId;
+  if (subcategoriaId) {
+    const subcategoria = await prisma.subcategoria.findUnique({ where: { id: subcategoriaId } });
+    if (!subcategoria || subcategoria.categoriaId !== categoriaId) throw new Error("La subcategoría no pertenece a la categoría seleccionada");
+  }
+  const cuentaId = data.cuentaId ?? transaction.cuentaId;
+  if (!cuentaId) throw new Error("El gasto debe tener una cuenta");
+  const cuenta = await prisma.cuenta.findUnique({ where: { id: cuentaId } });
+  if (!cuenta) throw new Error("Cuenta no encontrada");
+  const fecha = data.fecha ? parseDateValue(data.fecha) : undefined;
+  if (data.fecha && !fecha) throw new Error("Fecha inválida");
+
+  const updated = await prisma.transaccion.update({
+    where: { id: transaccionId },
+    data: {
+      monto: data.monto === undefined ? transaction.monto : normalizarMontoGasto(data.monto),
+      cuentaId,
+      categoriaId,
+      subcategoriaId,
+      comercio: data.comercio === undefined ? transaction.comercio : data.comercio,
+      nota: data.nota === undefined ? transaction.nota : data.nota,
+      fecha: fecha ? new Date(fecha) : transaction.fecha,
+    },
+  });
+  await invalidarAnalisisInsight(prisma, transaction.fecha.toISOString().slice(0, 7));
+  if (fecha) await invalidarAnalisisInsight(prisma, new Date(fecha).toISOString().slice(0, 7));
+  return updated;
+}
+
+export async function eliminarGasto(prisma: PrismaClient, transaccionId: string) {
+  await assertEditableExpense(prisma, transaccionId);
+  await prisma.transaccion.delete({ where: { id: transaccionId } });
+}
 
 export type ResolverCategoriaPendienteInput = z.infer<
   typeof ResolverCategoriaSchema
@@ -545,6 +647,7 @@ export async function resolverCategoriaPendienteTransaccion(
   if (!categoria) throw new Error("Categoría no encontrada");
 
   const updated = await prisma.$transaction(async (tx) => {
+    await assertSufficientFunds(tx, cuentaId, transaccion.monto.toString(), fecha);
     return tx.transaccion.update({
       where: { id: transaccion.id },
       data: {

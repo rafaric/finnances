@@ -28,6 +28,11 @@ function currency(value: number): string {
   }).format(value);
 }
 
+function incomeIdempotencyKey(accountId: string, date: string, amount: string, period: string, categoryId: string): string {
+  const normalizedAmount = Number(amount.replace(",", ".")).toFixed(2);
+  return `ingreso-${accountId}-${date}-${period}-${normalizedAmount}-${categoryId}`;
+}
+
 function dateValue(offsetDays = 0): string {
   const date = new Date();
   date.setDate(date.getDate() + offsetDays);
@@ -76,6 +81,7 @@ function App() {
   const [date, setDate] = useState(() => dateValue());
   const [note, setNote] = useState("");
   const [incomePeriod, setIncomePeriod] = useState(() => currentPeriod());
+  const [startsFinancialCycle, setStartsFinancialCycle] = useState(false);
   const [confirmAutomaticDebits, setConfirmAutomaticDebits] = useState(false);
   const [transferOriginId, setTransferOriginId] = useState("");
   const [transferDestinationId, setTransferDestinationId] = useState("");
@@ -204,11 +210,12 @@ function App() {
   }
 
   async function connectWithToken() {
-    const token = draftConnection.token.trim();
+    const token = draftConnection.token.trim().replace(/^("|')(.*)\1$/, "$2");
     if (!token) return;
     setIsConnecting(true);
     setAccountsError(undefined);
     try {
+      const nextAccounts = await listCuentas(token);
       browserStorage("session")?.removeItem("finnances.apiToken");
       browserStorage("local")?.removeItem("finnances.apiToken");
       if (rememberConnection) {
@@ -219,7 +226,13 @@ function App() {
         browserStorage("local")?.removeItem("finnances.rememberConnection");
       }
       setConnection({ token });
-      setNotice("Conexión guardada para esta sesión.");
+      setAccounts(nextAccounts);
+      if (nextAccounts.length > 0) {
+        setIsConfigOpen(false);
+        setNotice("Conexión establecida.");
+      } else {
+        setNotice("Token válido. Ahora podés crear tu primera cuenta.");
+      }
     } catch (error) {
       setAccountsError(error instanceof Error ? error.message : "No se pudo guardar la conexión.");
     } finally {
@@ -229,7 +242,7 @@ function App() {
 
   async function submitAccount(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const token = draftConnection.token.trim();
+    const token = draftConnection.token.trim().replace(/^("|')(.*)\1$/, "$2");
     if (!token) {
       setAccountsError("Ingresá el token de API para continuar.");
       return;
@@ -306,10 +319,11 @@ function App() {
           monto: amount,
           fechaCobro: date,
           periodoDisponible: incomePeriod,
+          iniciaCicloFinanciero: startsFinancialCycle,
           cuentaId: selectedAccountId,
           categoriaId: categoriaId!,
           subcategoriaId,
-          idempotencyKey: crypto.randomUUID(),
+           idempotencyKey: incomeIdempotencyKey(selectedAccountId, date, amount, incomePeriod, categoriaId!),
           confirmarDebitosAutomaticos: confirmAutomaticDebits,
         };
         if (!navigator.onLine) {
@@ -327,6 +341,7 @@ function App() {
         setCategoriaId(undefined);
         setSubcategoriaId(undefined);
         setConfirmAutomaticDebits(false);
+        setStartsFinancialCycle(false);
         setNotice(`Ingreso registrado. Saldo actual: ${currency(income.cuenta.saldoActual)}.`);
         setScreen("inicio");
         return;
@@ -527,7 +542,7 @@ function App() {
             <AccountPicker accounts={accounts} value={selectedAccountId} onChange={setSelectedAccountId} disabled={!accounts.length} />
 
             <CategorySelector token={connection.token} tipo={transactionType} categoriaId={categoriaId} subcategoriaId={subcategoriaId} onCategoriaChange={setCategoriaId} onSubcategoriaChange={setSubcategoriaId} />
-             {transactionType === "INGRESO" ? <><label className="form-field"><span>Disponible en</span><input type="month" value={incomePeriod} onChange={(event) => setIncomePeriod(event.target.value)} /></label>{accounts.find((account) => account.id === selectedAccountId)?.tipo !== "TARJETA_CREDITO" ? <label className="remember-connection"><input type="checkbox" checked={confirmAutomaticDebits} onChange={(event) => setConfirmAutomaticDebits(event.target.checked)} /><span>Confirmar débitos automáticos de tarjetas</span></label> : null}</> : null}
+             {transactionType === "INGRESO" ? <><label className="form-field"><span>Disponible en</span><input type="month" value={incomePeriod} onChange={(event) => setIncomePeriod(event.target.value)} /></label><label className="remember-connection"><input type="checkbox" checked={startsFinancialCycle} onChange={(event) => setStartsFinancialCycle(event.target.checked)} /><span>Este ingreso inicia el ciclo financiero</span></label>{accounts.find((account) => account.id === selectedAccountId)?.tipo !== "TARJETA_CREDITO" ? <label className="remember-connection"><input type="checkbox" checked={confirmAutomaticDebits} onChange={(event) => setConfirmAutomaticDebits(event.target.checked)} /><span>Confirmar débitos automáticos de tarjetas</span></label> : null}</> : null}
 
             {transactionType === "GASTO" ? <label className="form-field">
              <span>{accounts.find((account) => account.id === selectedAccountId)?.tipo === "TARJETA_CREDITO" ? "Comercio" : "Nota"} <small>{accounts.find((account) => account.id === selectedAccountId)?.tipo === "TARJETA_CREDITO" ? "(obligatorio)" : "(opcional)"}</small></span>
@@ -542,7 +557,7 @@ function App() {
         </form>
       ) : null}
 
-      {screen === "movimientos" ? <Movimientos token={connection.token} accounts={accounts} onRegisterExpense={() => setScreen("nuevo")} /> : null}
+       {screen === "movimientos" ? <Movimientos token={connection.token} accounts={accounts} onRegisterExpense={() => setScreen("nuevo")} onDataChanged={() => { void loadAccounts(connection.token); setSummaryRefreshVersion((current) => current + 1); }} /> : null}
 
       {screen === "analisis" ? <Analisis token={connection.token} initialPeriod={period} /> : null}
 

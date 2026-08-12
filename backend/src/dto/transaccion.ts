@@ -21,6 +21,8 @@ export interface TransaccionResponseDTO {
   monto: number;
   moneda: string;
   comercio?: string;
+  nota?: string;
+  createdAt?: string;
   origen: OrigenTransaccion;
   categoria: CategoriaResponseDTO;
   subcategoria?: SubcategoriaResponseDTO;
@@ -37,14 +39,16 @@ export interface ToTransaccionDTOInput {
     | "id"
     | "monto"
     | "moneda"
-    | "comercio"
+     | "comercio"
+     | "nota"
     | "origen"
     | "categoriaId"
     | "subcategoriaId"
     | "fecha"
     | "estado"
     | "textoCrudoOCR"
-    | "esTransferenciaAPersona"
+     | "esTransferenciaAPersona"
+     | "createdAt"
   >;
   categoria: Pick<Categoria, "id" | "nombre" | "icono" | "color" | "tipo" | "activa">;
   subcategoria?: Pick<Subcategoria, "id" | "nombre" | "categoriaId"> | null;
@@ -62,6 +66,8 @@ export function toTransaccionDTO({
     monto: Number(transaccion.monto),
     moneda: transaccion.moneda,
     comercio: transaccion.comercio ?? undefined,
+    nota: transaccion.nota ?? undefined,
+    createdAt: transaccion.createdAt.toISOString(),
     origen: transaccion.origen,
     categoria: {
       id: categoria.id,

@@ -20,6 +20,8 @@ import {
   crearResumenOCR,
   crearTransferenciaInterna,
   crearTransaccionWallet,
+  editarGasto,
+  eliminarGasto,
 } from "./services/transaccion";
 import { calcularSaldo } from "./services/saldo";
 import { calcularResumenMensual } from "./services/resumenMensual";
@@ -46,6 +48,7 @@ import { crearResumenDesdeGemini, listarResumens, reconciliarResumen } from "./s
 import { listarCargosResumen, resolverCargoResumen } from "./services/cargoResumen";
 import { registrarPagoResumen } from "./services/pagoResumen";
 import { registrarDebitosAutomaticos } from "./services/pagoResumen";
+import { obtenerRangoCiclo } from "./services/cicloFinanciero";
 import { toCargoResumenDTO } from "./dto/cargoResumen";
 import { toPagoResumenDTO } from "./dto/pagoResumen";
 
@@ -240,8 +243,19 @@ export function buildApp(prisma: PrismaClient) {
     try {
       const input = request.body as { confirmarDebitosAutomaticos?: boolean; cuentaId?: string; fechaCobro?: string; idempotencyKey?: string };
       const ingreso = await crearIngreso(prisma, request.body as never);
+      if (ingreso.iniciaCicloFinanciero) {
+        await prisma.cicloFinanciero.upsert({
+          where: { periodo: ingreso.periodoDisponible },
+          update: { inicio: ingreso.fechaCobro },
+          create: { periodo: ingreso.periodoDisponible, inicio: ingreso.fechaCobro },
+        });
+      }
       if (input.confirmarDebitosAutomaticos && input.cuentaId && input.fechaCobro && input.idempotencyKey) {
-        await registrarDebitosAutomaticos(prisma, input.cuentaId, input.fechaCobro, input.idempotencyKey);
+        try {
+          await registrarDebitosAutomaticos(prisma, input.cuentaId, input.fechaCobro, input.idempotencyKey);
+        } catch (error) {
+          request.log.error({ err: error, ingresoId: ingreso.id }, "Automatic card debit failed after income creation");
+        }
       }
       const [cuenta, categoria] = await Promise.all([
         toCuentaResumen(ingreso.cuentaId),
@@ -330,12 +344,13 @@ export function buildApp(prisma: PrismaClient) {
     }
   });
 
-  app.get("/api/v1/cuentas", async (_request, reply) => {
+  app.get("/api/v1/cuentas", async (request, reply) => {
     try {
       const cuentas = await prisma.cuenta.findMany({ orderBy: { nombre: "asc" } });
       const dtos = await Promise.all(cuentas.map(toCuentaResponse));
       return reply.send(dtos);
     } catch (error) {
+      request.log.error({ err: error }, "Failed to list accounts");
       if (error instanceof Error) return fromDomainError(reply, error);
       return internalError(reply);
     }
@@ -345,6 +360,7 @@ export function buildApp(prisma: PrismaClient) {
     cuentaId: z.string().optional(),
     periodo: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional(),
     categoriaId: z.string().optional(),
+    moneda: z.enum(["ARS", "USD"]).optional(),
     estado: z.nativeEnum(EstadoTransaccion).optional(),
     tipo: z.enum(["GASTO", "INGRESO"]).optional(),
     page: z.coerce.number().int().min(1).default(1),
@@ -355,6 +371,7 @@ export function buildApp(prisma: PrismaClient) {
     try {
       const query = TransaccionesQuerySchema.parse(request.query);
       const { cuentaId, periodo, categoriaId, estado, tipo, page, limit } = query;
+      const cycleRange = periodo ? await obtenerRangoCiclo(prisma, periodo) : undefined;
 
       const where: any = {};
       if (cuentaId) where.cuentaId = cuentaId;
@@ -363,15 +380,12 @@ export function buildApp(prisma: PrismaClient) {
       if (tipo === "GASTO") where.monto = { lt: 0 };
       if (tipo === "INGRESO") where.monto = { gt: 0 };
       if (periodo) {
-        const start = new Date(`${periodo}-01T00:00:00.000Z`);
-        const end = new Date(start);
-        end.setUTCMonth(end.getUTCMonth() + 1);
-        where.fecha = { gte: start, lt: end };
+        where.fecha = { gte: cycleRange!.start, lt: cycleRange!.end };
       }
 
       const ingresoWhere: any = {
         ...(cuentaId ? { cuentaId } : {}),
-        ...(periodo ? { periodoDisponible: periodo } : {}),
+         ...(cycleRange ? { fechaCobro: { gte: cycleRange.start, lt: cycleRange.end } } : {}),
         ...(categoriaId ? { categoriaId } : {}),
       };
       const includeIngresos = !estado && tipo !== "GASTO";
@@ -408,6 +422,41 @@ export function buildApp(prisma: PrismaClient) {
     } catch (error) {
       if (error instanceof ZodError) return fromZodError(reply, error);
       if (error instanceof Error && error.message.includes("Unique constraint")) return fromDomainError(reply, new Error("Entidad OCR ya asociada a otra cuenta"));
+      if (error instanceof Error) return fromDomainError(reply, error);
+      return internalError(reply);
+    }
+  });
+
+  const EditarGastoRequestSchema = z.object({
+    monto: z.string().or(z.number()).optional(),
+    cuentaId: z.string().optional(),
+    categoriaId: z.string().optional(),
+    subcategoriaId: z.string().nullable().optional(),
+    comercio: z.string().max(60).nullable().optional(),
+    nota: z.string().max(120).nullable().optional(),
+    fecha: z.string().optional(),
+  });
+
+  app.patch("/api/v1/transacciones/:id", async (request, reply) => {
+    try {
+      const params = z.object({ id: z.string() }).parse(request.params);
+      const data = EditarGastoRequestSchema.parse(request.body);
+      const resultado = await editarGasto(prisma, params.id, data);
+      return reply.send(await toTransaccionResponse(resultado));
+    } catch (error) {
+      if (error instanceof ZodError) return fromZodError(reply, error);
+      if (error instanceof Error) return fromDomainError(reply, error);
+      return internalError(reply);
+    }
+  });
+
+  app.delete("/api/v1/transacciones/:id", async (request, reply) => {
+    try {
+      const params = z.object({ id: z.string() }).parse(request.params);
+      await eliminarGasto(prisma, params.id);
+      return reply.code(204).send();
+    } catch (error) {
+      if (error instanceof ZodError) return fromZodError(reply, error);
       if (error instanceof Error) return fromDomainError(reply, error);
       return internalError(reply);
     }
@@ -487,8 +536,9 @@ export function buildApp(prisma: PrismaClient) {
     idempotencyKey: z.string(),
     fecha: z.string().optional(),
     comercio: z.string().optional(),
+    nota: z.string().max(120).optional(),
     cuotaId: z.string().optional(),
-  });
+  }).strict();
 
   app.post("/transacciones", async (request, reply) => {
     try {
@@ -601,12 +651,42 @@ export function buildApp(prisma: PrismaClient) {
     }
   });
 
+  app.get("/api/v1/transferencias", async (request, reply) => {
+    try {
+      const query = z.object({ cuentaId: z.string().optional(), periodo: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional() }).parse(request.query);
+      const range = query.periodo ? await obtenerRangoCiclo(prisma, query.periodo) : undefined;
+      const transfers = await prisma.transferenciaInterna.findMany({
+        where: {
+          ...(query.cuentaId ? { OR: [{ cuentaOrigenId: query.cuentaId }, { cuentaDestinoId: query.cuentaId }] } : {}),
+          ...(range ? { fecha: { gte: range.start, lt: range.end } } : {}),
+        },
+        include: { cuentaOrigen: true, cuentaDestino: true },
+        orderBy: [{ fecha: "desc" }, { id: "desc" }],
+        take: 100,
+      });
+      const result = await Promise.all(transfers.map(async (transferencia) => {
+        const [cuentaOrigen, cuentaDestino] = await Promise.all([
+          toCuentaResumen(transferencia.cuentaOrigenId),
+          toCuentaResumen(transferencia.cuentaDestinoId),
+        ]);
+        return toTransferenciaDTO({ transferencia, cuentaOrigen, cuentaDestino });
+      }));
+      return reply.send(result);
+    } catch (error) {
+      if (error instanceof ZodError) return fromZodError(reply, error);
+      if (error instanceof Error) return fromDomainError(reply, error);
+      return internalError(reply);
+    }
+  });
+
   const CompraSchema = z.object({
     montoTotal: z.string().or(z.number()),
     comercio: z.string(),
     fechaCompra: z.string(),
     cantidadCuotas: z.number().int().min(1).max(120).optional(),
     cuentaId: z.string(),
+    categoriaId: z.string().optional(),
+    moneda: z.enum(["ARS", "USD"]).optional(),
   });
 
   const CompraQuerySchema = z.object({
