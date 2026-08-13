@@ -79,6 +79,13 @@ async function resolverCuentaWallet(prisma: PrismaClient, tarjeta: string): Prom
   return matches.length === 1 ? matches[0].id : undefined;
 }
 
+async function resolverContactoCategoria(prisma: PrismaClient, nombre: string | undefined) {
+  if (!nombre) return undefined;
+  return prisma.contactoCategoria.findUnique({
+    where: { nombreDetectado: normalizeEntity(nombre) },
+  });
+}
+
 const GastoOCRSchema = z.object({
   textoCrudo: z.string(),
   cuentaId: z.string().optional(),
@@ -702,7 +709,13 @@ export async function crearTransaccionOCR(
   const categoriaId = categoriaNombre ? categoriaNombreToId(categoriaNombre) : undefined;
 
   const esTransferenciaAPersona = "esTransferenciaAPersona" in interpreted && interpreted.esTransferenciaAPersona === true;
-  const estado = interpreted.exito && cuentaId && categoriaId && !esTransferenciaAPersona
+  const contactoCategoria = esTransferenciaAPersona
+    ? await resolverContactoCategoria(prisma, interpreted.comercio)
+    : undefined;
+  const categoriaResueltaId = contactoCategoria?.categoriaId ?? categoriaId;
+  const estado = cuentaId && interpreted.monto && contactoCategoria
+    ? EstadoTransaccion.CONFIRMADA
+    : interpreted.exito && cuentaId && categoriaId && !esTransferenciaAPersona
     ? EstadoTransaccion.CONFIRMADA
       : cuentaId && interpreted.monto && (!categoriaId || esTransferenciaAPersona)
         ? EstadoTransaccion.PENDIENTE_CATEGORIA
@@ -711,7 +724,8 @@ export async function crearTransaccionOCR(
   return crearTransaccion(prisma, {
     monto: interpreted.monto ?? "0",
     cuentaId,
-    categoriaId: categoriaId ?? "cat-otros",
+    categoriaId: categoriaResueltaId ?? "cat-otros",
+    subcategoriaId: contactoCategoria?.subcategoriaId ?? undefined,
     origen: OrigenTransaccion.OCR_IA,
     idempotencyKey: data.idempotencyKey,
     comercio: interpreted.comercio,

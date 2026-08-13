@@ -904,6 +904,34 @@ export function buildApp(prisma: PrismaClient) {
     activa: z.boolean().optional(),
   });
 
+  const ContactoCategoriaSchema = z.object({
+    nombres: z.array(z.string().min(1).max(80)).min(1),
+    categoriaId: z.string(),
+    subcategoriaId: z.string().optional(),
+  });
+
+  app.post("/api/v1/contactos-categoria", async (request, reply) => {
+    try {
+      const data = ContactoCategoriaSchema.parse(request.body);
+      const categoria = await prisma.categoria.findUnique({ where: { id: data.categoriaId } });
+      if (!categoria || categoria.tipo !== "GASTO") throw new Error("Categoría no encontrada");
+      if (data.subcategoriaId) {
+        const subcategoria = await prisma.subcategoria.findUnique({ where: { id: data.subcategoriaId } });
+        if (!subcategoria || subcategoria.categoriaId !== categoria.id) throw new Error("La subcategoría no pertenece a la categoría seleccionada");
+      }
+      const contactos = await Promise.all(data.nombres.map((nombre) => prisma.contactoCategoria.upsert({
+        where: { nombreDetectado: normalizeEntity(nombre) },
+        update: { categoriaId: categoria.id, subcategoriaId: data.subcategoriaId },
+        create: { nombreDetectado: normalizeEntity(nombre), categoriaId: categoria.id, subcategoriaId: data.subcategoriaId },
+      })));
+      return reply.code(201).send(contactos);
+    } catch (error) {
+      if (error instanceof ZodError) return fromZodError(reply, error);
+      if (error instanceof Error) return fromDomainError(reply, error);
+      return internalError(reply);
+    }
+  });
+
   app.post("/api/v1/subcategorias", async (request, reply) => {
     try {
       const data = SubcategoriaSchema.parse(request.body);

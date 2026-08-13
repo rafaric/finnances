@@ -66,6 +66,20 @@ async function run() {
       throw new Error("Expected OCR account resolution by entity name");
     }
 
+    const familia = await prisma.categoria.create({ data: { nombre: `Familia ${Date.now()}`, icono: "CORAZON", color: "ROSA", tipo: "GASTO" } });
+    const sofi = await prisma.subcategoria.create({ data: { nombre: `Sofi ${Date.now()}`, categoriaId: familia.id } });
+    const contactName = `Sofi Aguirre ${Date.now()}`;
+    await prisma.contactoCategoria.create({ data: { nombreDetectado: contactName.toLowerCase(), categoriaId: familia.id, subcategoriaId: sofi.id } });
+    const transferToKnownContact = await crearTransaccionOCR(prisma, {
+      textoCrudo: `Transferencia a ${contactName} por $100`,
+      cuentaId: cuenta.id,
+      data: { monto: "100", comercio: contactName, esTransferenciaAPersona: true },
+      idempotencyKey: `ocr-contact-${Date.now()}`,
+    });
+    if (transferToKnownContact.estado !== "CONFIRMADA" || transferToKnownContact.categoriaId !== familia.id || transferToKnownContact.subcategoriaId !== sofi.id) {
+      throw new Error("Expected known contact transfer to use its learned category");
+    }
+
     const corrected = await corregirTransaccionOCR(prisma, pending.id, {
       categoriaId: "cat-comida",
       comercio: "Supermercado",
@@ -98,7 +112,7 @@ async function run() {
     if (cuentaAfter?.saldoInicial.toString() !== "500") {
       throw new Error("Expected saldoInicial to remain immutable after OCR flow");
     }
-    if (saldo !== 150) {
+    if (saldo !== 50) {
       throw new Error(
         "Expected calculated saldo to reflect confirmed and corrected OCR transactions",
       );
