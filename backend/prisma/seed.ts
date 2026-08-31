@@ -11,6 +11,7 @@ async function main() {
     { id: "cat-ocio", nombre: "Ocio", icono: IconoCategoria.OCULOS, color: ColorCategoria.VIOLETA, tipo: TipoCategoria.GASTO },
     { id: "cat-deudas", nombre: "Deudas", icono: IconoCategoria.CORAZON, color: ColorCategoria.ROJO, tipo: TipoCategoria.GASTO },
     { id: "cat-otros", nombre: "Otros", icono: IconoCategoria.OTRO, color: ColorCategoria.BLANCO, tipo: TipoCategoria.GASTO },
+    { id: "cat-vivienda", nombre: "Vivienda", icono: IconoCategoria.CASA, color: ColorCategoria.VERDE, tipo: TipoCategoria.GASTO },
     { id: "cat-ingresos", nombre: "Ingresos", icono: IconoCategoria.LIBROS, color: ColorCategoria.VERDE, tipo: TipoCategoria.INGRESO },
     { id: "cat-sueldo", nombre: "Sueldo", icono: IconoCategoria.LIBROS, color: ColorCategoria.VERDE, tipo: TipoCategoria.INGRESO },
     { id: "cat-freelance", nombre: "Freelance", icono: IconoCategoria.AVION, color: ColorCategoria.AZUL, tipo: TipoCategoria.INGRESO },
@@ -25,7 +26,7 @@ async function main() {
         icono: cat.icono,
         color: cat.color,
         tipo: cat.tipo,
-        activa: true,
+        activa: cat.id === "cat-renta" ? false : true,
       },
       create: {
         id: cat.id,
@@ -33,7 +34,7 @@ async function main() {
         icono: cat.icono,
         color: cat.color,
         tipo: cat.tipo,
-        activa: true,
+        activa: cat.id === "cat-renta" ? false : true,
       },
     });
   }
@@ -63,12 +64,12 @@ async function main() {
     { nombre: "Seguro vehicular", categoriaId: "cat-transporte" },
     { nombre: "Patente", categoriaId: "cat-transporte" },
 
-    { nombre: "Alquiler", categoriaId: "cat-renta" },
-    { nombre: "Expensas", categoriaId: "cat-renta" },
-    { nombre: "ABL", categoriaId: "cat-renta" },
-    { nombre: "Impuesto municipal", categoriaId: "cat-renta" },
-    { nombre: "Mantenimiento hogar", categoriaId: "cat-renta" },
-    { nombre: "Seguro del hogar", categoriaId: "cat-renta" },
+    { nombre: "Alquiler", categoriaId: "cat-vivienda" },
+    { nombre: "Expensas", categoriaId: "cat-vivienda" },
+    { nombre: "ABL", categoriaId: "cat-vivienda" },
+    { nombre: "Impuesto municipal", categoriaId: "cat-vivienda" },
+    { nombre: "Mantenimiento hogar", categoriaId: "cat-vivienda" },
+    { nombre: "Seguro del hogar", categoriaId: "cat-vivienda" },
 
     { nombre: "Luz", categoriaId: "cat-servicios" },
     { nombre: "Gas", categoriaId: "cat-servicios" },
@@ -138,6 +139,32 @@ async function main() {
       },
     });
   }
+
+  await prisma.subcategoria.updateMany({
+    where: {
+      categoriaId: "cat-renta",
+      activa: true,
+    },
+    data: { activa: false },
+  });
+
+  await prisma.subcategoria.updateMany({
+    where: {
+      categoriaId: "cat-servicios",
+      nombre: "Streaming",
+      activa: true,
+    },
+    data: { activa: false },
+  });
+
+  await prisma.subcategoria.updateMany({
+    where: {
+      categoriaId: "cat-transporte",
+      nombre: "Patente",
+      activa: true,
+    },
+    data: { activa: false },
+  });
 
   console.log("Subcategorías sembradas correctamente");
 }
