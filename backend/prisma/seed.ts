@@ -12,6 +12,8 @@ async function main() {
     { id: "cat-deudas", nombre: "Deudas", icono: IconoCategoria.CORAZON, color: ColorCategoria.ROJO, tipo: TipoCategoria.GASTO },
     { id: "cat-otros", nombre: "Otros", icono: IconoCategoria.OTRO, color: ColorCategoria.BLANCO, tipo: TipoCategoria.GASTO },
     { id: "cat-vivienda", nombre: "Vivienda", icono: IconoCategoria.CASA, color: ColorCategoria.VERDE, tipo: TipoCategoria.GASTO },
+    { id: "cat-salud", nombre: "Salud", icono: IconoCategoria.GIMNASIO, color: ColorCategoria.TURQUESA, tipo: TipoCategoria.GASTO },
+    { id: "cat-educacion", nombre: "Educación", icono: IconoCategoria.LIBROS, color: ColorCategoria.AMARILLO, tipo: TipoCategoria.GASTO },
     { id: "cat-ingresos", nombre: "Ingresos", icono: IconoCategoria.LIBROS, color: ColorCategoria.VERDE, tipo: TipoCategoria.INGRESO },
     { id: "cat-sueldo", nombre: "Sueldo", icono: IconoCategoria.LIBROS, color: ColorCategoria.VERDE, tipo: TipoCategoria.INGRESO },
     { id: "cat-freelance", nombre: "Freelance", icono: IconoCategoria.AVION, color: ColorCategoria.AZUL, tipo: TipoCategoria.INGRESO },
@@ -107,6 +109,9 @@ async function main() {
     { nombre: "Belleza", categoriaId: "cat-otros" },
     { nombre: "Cuidado personal", categoriaId: "cat-otros" },
     { nombre: "Donaciones", categoriaId: "cat-otros" },
+    { nombre: "Salud", categoriaId: "cat-salud" },
+    { nombre: "Farmacia", categoriaId: "cat-salud" },
+    { nombre: "Educación", categoriaId: "cat-educacion" },
 
     { nombre: "Sueldo en blanco", categoriaId: "cat-sueldo" },
     { nombre: "Aguinaldo", categoriaId: "cat-sueldo" },
@@ -143,6 +148,15 @@ async function main() {
   await prisma.subcategoria.updateMany({
     where: {
       categoriaId: "cat-renta",
+      activa: true,
+    },
+    data: { activa: false },
+  });
+
+  await prisma.subcategoria.updateMany({
+    where: {
+      categoriaId: "cat-otros",
+      nombre: { in: ["Salud", "Farmacia", "Educación"] },
       activa: true,
     },
     data: { activa: false },
