@@ -43,10 +43,15 @@ export async function registrarPagoResumen(prisma: PrismaClient, resumenId: stri
 export async function registrarDebitosAutomaticos(prisma: PrismaClient, cuentaOrigenId: string, fecha: string, idempotencyKey: string) {
   const cards = await prisma.cuenta.findMany({ where: { cuentaDebitoMinimoId: cuentaOrigenId, tipo: TipoCuenta.TARJETA_CREDITO } });
   const payments = [];
+  const debitDate = new Date(fecha);
   for (const card of cards) {
-    const resumen = await prisma.resumen.findFirst({
+    const summaries = await prisma.resumen.findMany({
       where: { cuentaId: card.id, estado: { in: ["PENDIENTE", "PAGADO_PARCIAL"] } },
       orderBy: { periodo: "desc" },
+    });
+    const resumen = summaries.find((candidate) => {
+      if (!candidate.fechaCierre || !candidate.fechaVencimiento) return true;
+      return candidate.fechaCierre <= debitDate && debitDate <= candidate.fechaVencimiento;
     });
     if (!resumen) continue;
     const paid = await prisma.pagoResumen.aggregate({ where: { resumenId: resumen.id }, _sum: { monto: true } });
