@@ -285,7 +285,7 @@ export function Categorias({ token }: CategoriasProps) {
                 Cancelar
               </button>
               <button className="primary-action" type="submit">
-                Crear
+                {editingCategoriaId ? "Guardar cambios" : "Crear categoría"}
               </button>
             </div>
           </form>
