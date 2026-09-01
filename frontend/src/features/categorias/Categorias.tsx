@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { listCategorias, crearCategoria, actualizarCategoria, listSubcategorias, crearSubcategoria, actualizarSubcategoria, type CrearCategoriaInput } from "../../api/client";
-import type { CategoriaResponseDTO, SubcategoriaResponseDTO } from "../../api/types";
+import type { CategoriaResponseDTO, IconoCategoria, SubcategoriaResponseDTO } from "../../api/types";
+import { CategoryIcon } from "../../components/CategoryIcon";
 
 interface CategoriasProps {
   token: string;
@@ -23,7 +24,7 @@ function CategoriaCard({ categoria, subcategorias, token, onUpdated, onSubcatego
   return (
     <article className={`categoria-card color-${categoria.color.toLowerCase()}`}>
       <div className="categoria-header">
-        <span className={`category-icon icon-${categoria.icono.toLowerCase()}`}></span>
+        <CategoryIcon icon={categoria.icono} size={24} />
         <h3>{categoria.nombre} {categoria.uso ? <small>({categoria.uso} usos)</small> : null}</h3>
         <span className={`tipo-badge tipo-${categoria.tipo.toLowerCase()}`}>{categoria.tipo === "GASTO" ? "Gasto" : "Ingreso"}</span>
         <div className="categoria-actions">
@@ -61,7 +62,7 @@ export function Categorias({ token }: CategoriasProps) {
   const [subcategoryModal, setSubcategoryModal] = useState<{ id?: string; categoriaId: string; nombre: string }>();
   const [isSavingSubcategory, setIsSavingSubcategory] = useState(false);
 
-  const icons: CrearCategoriaInput["icono"][] = [
+  const icons: IconoCategoria[] = [
     "UTENSILIOS_COCINA", "CARRO", "CASA", "LLAVE", "TELEFONO",
     "CORAZON", "OCULOS", "SUPER", "GIMNASIO", "LIBROS", "AVION", "OTRO",
   ];
@@ -251,10 +252,12 @@ export function Categorias({ token }: CategoriasProps) {
                   <button
                     key={icon}
                     type="button"
+                    aria-label={`Seleccionar ícono ${icon.toLowerCase().replaceAll("_", " ")}`}
+                    title={icon.toLowerCase().replaceAll("_", " ")}
                     className={createIcono === icon ? "selected" : ""}
                     onClick={() => setCreateIcono(icon)}
                   >
-                    <span className={`category-icon icon-${icon.toLowerCase()}`}></span>
+                    <CategoryIcon icon={icon} size={22} />
                   </button>
                 ))}
               </div>

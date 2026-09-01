@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { type CategoriaResponseDTO, type SubcategoriaResponseDTO, type TipoCategoria } from "../api/types";
 import { listCategorias, listSubcategorias } from "../api/client";
+import { CategoryIcon } from "./CategoryIcon";
 
 const OFFLINE_CATEGORIES: CategoriaResponseDTO[] = [
   ["cat-comida", "Comida", "UTENSILIOS_COCINA"],
@@ -86,7 +87,7 @@ export function CategorySelector({
                 onSubcategoriaChange(undefined);
               }}
             >
-              <span className={`category-icon icon-${categoria.icono.toLowerCase()}`}></span>
+              <CategoryIcon icon={categoria.icono} />
               {categoria.nombre}
             </button>
           ))}

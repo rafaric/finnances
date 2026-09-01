@@ -651,47 +651,10 @@ fieldset {
   font-size: 0.8rem;
   font-weight: 600;
 }
-.category-icon::before {
-  font-size: 1.25rem;
+.category-icon {
   display: inline-block;
   line-height: 1;
   margin-right: 10px;
-}
-.icon-utensilios_cocina::before {
-  content: "🍽️";
-}
-.icon-carro::before {
-  content: "🚌";
-}
-.icon-casa::before {
-  content: "🏠";
-}
-.icon-llave::before {
-  content: "🔑";
-}
-.icon-telefono::before {
-  content: "📞";
-}
-.icon-corazon::before {
-  content: "💘";
-}
-.icon-oculos::before {
-  content: "🕶️";
-}
-.icon-super::before {
-  content: "🛒";
-}
-.icon-gimnasio::before {
-  content: "💪";
-}
-.icon-libros::before {
-  content: "📚";
-}
-.icon-avion::before {
-  content: "✈️";
-}
-.icon-otro::before {
-  content: "📦";
 }
 .subcategory-pills button.selected {
   border-color: #173f30;
@@ -1555,7 +1518,7 @@ fieldset {
 .categoria-card { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 16px; border: 1px solid #d5e0da; border-radius: 18px; background: #fbfdfb; box-shadow: 0 5px 14px rgba(28, 58, 45, .05); }
 .categoria-header { display: contents; }
 .categoria-header > .category-icon { grid-row: span 2; display: grid; width: 42px; height: 42px; place-items: center; border-radius: 13px; background: #e9f1eb; color: #32684f; }
-.categoria-header > .category-icon::before { margin-right: 0; }
+.categoria-header > .category-icon { margin-right: 0; }
 .categoria-header h3 { grid-column: 2; margin: 0; color: #1f392f; font-size: 1rem; }
 .categoria-header h3 small { color: #6b7f75; font-size: .7rem; font-weight: 600; }
 .tipo-badge { grid-column: 3; grid-row: 1; padding: 5px 8px; border-radius: 999px; background: #e8f2ea; color: #26523d; font-size: .68rem; font-weight: 800; }
