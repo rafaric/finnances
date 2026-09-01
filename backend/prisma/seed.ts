@@ -9,7 +9,7 @@ async function main() {
     { id: "cat-renta", nombre: "Renta", icono: IconoCategoria.CASA, color: ColorCategoria.VERDE, tipo: TipoCategoria.GASTO },
     { id: "cat-servicios", nombre: "Servicios", icono: IconoCategoria.TELEFONO, color: ColorCategoria.INDIGO, tipo: TipoCategoria.GASTO },
     { id: "cat-ocio", nombre: "Ocio", icono: IconoCategoria.OCULOS, color: ColorCategoria.VIOLETA, tipo: TipoCategoria.GASTO },
-    { id: "cat-deudas", nombre: "Deudas", icono: IconoCategoria.CORAZON, color: ColorCategoria.ROJO, tipo: TipoCategoria.GASTO },
+    { id: "cat-deudas", nombre: "Deudas", icono: IconoCategoria.LLAVE, color: ColorCategoria.ROJO, tipo: TipoCategoria.GASTO },
     { id: "cat-otros", nombre: "Otros", icono: IconoCategoria.OTRO, color: ColorCategoria.BLANCO, tipo: TipoCategoria.GASTO },
     { id: "cat-vivienda", nombre: "Vivienda", icono: IconoCategoria.CASA, color: ColorCategoria.VERDE, tipo: TipoCategoria.GASTO },
     { id: "cat-salud", nombre: "Salud", icono: IconoCategoria.GIMNASIO, color: ColorCategoria.TURQUESA, tipo: TipoCategoria.GASTO },

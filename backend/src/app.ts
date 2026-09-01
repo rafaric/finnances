@@ -57,7 +57,7 @@ function normalizeEntity(value: string): string {
 }
 
 export function buildApp(prisma: PrismaClient) {
-  const app = Fastify({ logger: false });
+  const app = Fastify({ logger: process.env.NODE_ENV !== "test" });
 
   async function getCuentaOrThrow(cuentaId: string): Promise<Cuenta> {
     const cuenta = await prisma.cuenta.findUnique({ where: { id: cuentaId } });
@@ -89,7 +89,9 @@ export function buildApp(prisma: PrismaClient) {
     .split(",")
     .map((origin) => origin.trim())
     .filter(Boolean);
-  if (process.env.NODE_ENV !== "production") allowedOrigins.push("http://localhost:4173");
+  if (process.env.NODE_ENV !== "production") {
+    allowedOrigins.push("http://localhost:5173", "http://localhost:4173");
+  }
 
   app.register(cors, {
     origin: allowedOrigins.length ? allowedOrigins : false,
