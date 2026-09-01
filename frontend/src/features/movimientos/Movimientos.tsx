@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { ArrowLeftRight, Check, CreditCard, PenLine, ReceiptText, RefreshCw, Trash2, X, Zap } from "lucide-react";
+import { ArrowLeftRight, Check, CreditCard, Funnel, PenLine, ReceiptText, RefreshCw, Trash2, X, Zap } from "lucide-react";
 import { editarGasto, eliminarGasto, listCategorias, listTransacciones, listTransferencias } from "../../api/client";
 import type {
   CuentaResponseDTO,
@@ -201,7 +201,7 @@ export function Movimientos({ token, accounts, onRegisterExpense, onDataChanged 
       <div className="movement-toolbar">
         <PeriodPills value={periodo} onChange={(nextPeriod) => { setPeriodo(nextPeriod); setPage(1); }} includeAll />
         <div className="movement-actions">
-          <button className={isFiltersOpen ? "filter-button active" : "filter-button"} type="button" aria-expanded={isFiltersOpen} onClick={() => setIsFiltersOpen((current) => !current)}>Filtrar</button>
+           <button className={isFiltersOpen ? "filter-button active" : "filter-button"} type="button" aria-label="Filtrar movimientos" title="Filtrar movimientos" aria-expanded={isFiltersOpen} onClick={() => setIsFiltersOpen((current) => !current)}><Funnel size={18} aria-hidden="true" /></button>
           {hasFilters ? <button className="clear-filters-button" type="button" onClick={clearFilters}>Limpiar filtros</button> : null}
         </div>
       </div>

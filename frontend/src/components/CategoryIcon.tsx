@@ -14,6 +14,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { ColorCategoria, IconoCategoria } from "../api/types";
+import "./category-icons.css";
 
 const CATEGORY_ICONS: Record<IconoCategoria, LucideIcon> = {
   UTENSILIOS_COCINA: Utensils,
