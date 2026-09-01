@@ -10,6 +10,12 @@
   margin-right: 0;
 }
 
+.movement-category-mark .category-icon {
+  display: block;
+  margin-right: 0;
+  padding: 0;
+}
+
 .categoria-header > .category-icon-shell {
   grid-row: span 2;
 }
