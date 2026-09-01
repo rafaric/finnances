@@ -13,7 +13,7 @@ import {
   Dumbbell,
   type LucideIcon,
 } from "lucide-react";
-import type { IconoCategoria } from "../api/types";
+import type { ColorCategoria, IconoCategoria } from "../api/types";
 
 const CATEGORY_ICONS: Record<IconoCategoria, LucideIcon> = {
   UTENSILIOS_COCINA: Utensils,
@@ -32,11 +32,13 @@ const CATEGORY_ICONS: Record<IconoCategoria, LucideIcon> = {
 
 interface CategoryIconProps {
   icon: IconoCategoria;
+  color?: ColorCategoria;
   size?: number;
   className?: string;
 }
 
-export function CategoryIcon({ icon, size = 20, className = "category-icon" }: CategoryIconProps) {
+export function CategoryIcon({ icon, color, size = 20, className = "category-icon" }: CategoryIconProps) {
   const Icon = CATEGORY_ICONS[icon] ?? Package;
-  return <Icon className={className} size={size} strokeWidth={1.8} aria-hidden="true" />;
+  const colorClass = color ? ` category-icon-color-${color.toLowerCase()}` : "";
+  return <Icon className={`${className}${colorClass}`} size={size} strokeWidth={1.8} aria-hidden="true" />;
 }

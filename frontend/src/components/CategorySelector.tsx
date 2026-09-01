@@ -87,7 +87,7 @@ export function CategorySelector({
                 onSubcategoriaChange(undefined);
               }}
             >
-              <CategoryIcon icon={categoria.icono} />
+              <CategoryIcon icon={categoria.icono} color={categoria.color} />
               {categoria.nombre}
             </button>
           ))}

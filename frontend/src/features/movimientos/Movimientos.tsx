@@ -249,7 +249,7 @@ export function Movimientos({ token, accounts, onRegisterExpense, onDataChanged 
               {unifiedItems.map((item) => { if (item.kind === "transaction") { const transaction = item.value; return (
                 <article className="movement-row" key={transaction.id}>
                   <div className="movement-main">
-                    <span className={`movement-category-mark category-color-${transaction.categoria?.color.toLowerCase() ?? "blanco"}`} aria-hidden="true"><CategoryIcon icon={transaction.categoria?.icono ?? "OTRO"} /></span>
+                    <span className={`movement-category-mark category-color-${transaction.categoria?.color.toLowerCase() ?? "blanco"}`} aria-hidden="true"><CategoryIcon icon={transaction.categoria?.icono ?? "OTRO"} color={transaction.categoria?.color} /></span>
                     <div className="movement-copy">
                       <div className="movement-title"><strong>{transaction.categoria?.nombre ?? "Sin categoría"}</strong><span className={`movement-origin movement-origin-${transaction.origen.toLowerCase()}`} title={originMeta(transaction.origen).label}>{originMeta(transaction.origen).icon}<span className="sr-only">{originMeta(transaction.origen).label}</span></span></div>
                         <span className="movement-meta">{transaction.cuenta?.nombre ?? "Cuenta sin resolver"} · {formatDate(transaction.fecha)}</span>

@@ -655,7 +655,21 @@ fieldset {
   display: inline-block;
   line-height: 1;
   margin-right: 10px;
+  padding: 4px;
+  box-sizing: border-box;
 }
+.category-icon-color-rojo { color: #b94f43; }
+.category-icon-color-naranja { color: #c8752e; }
+.category-icon-color-amarillo { color: #a88719; }
+.category-icon-color-verde { color: #39794b; }
+.category-icon-color-azul { color: #3d6f9f; }
+.category-icon-color-indigo { color: #4e59a4; }
+.category-icon-color-violeta { color: #7d4b91; }
+.category-icon-color-rosa { color: #a65375; }
+.category-icon-color-pez { color: #2f8580; }
+.category-icon-color-turquesa { color: #2d8f8c; }
+.category-icon-color-blanco { color: #66756c; }
+.category-icon-color-negro { color: #27352e; }
 .subcategory-pills button.selected {
   border-color: #173f30;
   background: #e1eee6;

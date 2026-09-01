@@ -24,7 +24,7 @@ function CategoriaCard({ categoria, subcategorias, token, onUpdated, onSubcatego
   return (
     <article className={`categoria-card color-${categoria.color.toLowerCase()}`}>
       <div className="categoria-header">
-        <CategoryIcon icon={categoria.icono} size={24} />
+        <CategoryIcon icon={categoria.icono} color={categoria.color} size={24} />
         <h3>{categoria.nombre} {categoria.uso ? <small>({categoria.uso} usos)</small> : null}</h3>
         <span className={`tipo-badge tipo-${categoria.tipo.toLowerCase()}`}>{categoria.tipo === "GASTO" ? "Gasto" : "Ingreso"}</span>
         <div className="categoria-actions">
