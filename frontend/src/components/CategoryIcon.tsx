@@ -40,5 +40,5 @@ interface CategoryIconProps {
 export function CategoryIcon({ icon, color, size = 20, className = "category-icon" }: CategoryIconProps) {
   const Icon = CATEGORY_ICONS[icon] ?? Package;
   const colorClass = color ? ` category-icon-color-${color.toLowerCase()}` : "";
-  return <Icon className={`${className}${colorClass}`} size={size} strokeWidth={1.8} aria-hidden="true" />;
+  return <Icon className={`${className}${colorClass}`} stroke={`${color}`} size={size} strokeWidth={1.8} aria-hidden="true" />;
 }
