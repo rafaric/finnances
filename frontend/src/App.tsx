@@ -65,6 +65,7 @@ function App() {
   const [isConfigOpen, setIsConfigOpen] = useState(!connection.token);
   const [accountName, setAccountName] = useState("");
   const [accountEntity, setAccountEntity] = useState("");
+  const [accountLastFour, setAccountLastFour] = useState("");
   const [isAccountsOpen, setIsAccountsOpen] = useState(false);
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const [editingAccountId, setEditingAccountId] = useState<string>();
@@ -253,6 +254,7 @@ function App() {
         nombre: accountName.trim(),
         tipo: accountType,
         nombreEntidad: accountEntity.trim() || undefined,
+        ultimosDigitos: accountLastFour.trim() || undefined,
         saldoInicial: initialBalance || undefined,
       });
        browserStorage("session")?.removeItem("finnances.apiToken");
@@ -269,6 +271,7 @@ function App() {
       setSelectedAccountId(account.id);
       setAccountName("");
       setAccountEntity("");
+      setAccountLastFour("");
       setInitialBalance("");
       setIsConfigOpen(false);
       setNotice(`Cuenta ${account.nombre} creada.`);
@@ -285,16 +288,16 @@ function App() {
     setAccountFormSaving(true);
     try {
       if (editingAccountId) {
-        const updated = await actualizarCuenta(connection.token, editingAccountId, { nombre: accountName.trim(), nombreEntidad: accountEntity.trim() || undefined });
+        const updated = await actualizarCuenta(connection.token, editingAccountId, { nombre: accountName.trim(), nombreEntidad: accountEntity.trim() || undefined, ultimosDigitos: accountLastFour.trim() || undefined });
         setAccounts((current) => current.map((account) => account.id === updated.id ? updated : account));
         setNotice(`Cuenta ${updated.nombre} actualizada.`);
       } else {
-        const created = await crearCuenta(connection.token, { nombre: accountName.trim(), tipo: accountType, nombreEntidad: accountEntity.trim() || undefined, saldoInicial: initialBalance || undefined });
+        const created = await crearCuenta(connection.token, { nombre: accountName.trim(), tipo: accountType, nombreEntidad: accountEntity.trim() || undefined, ultimosDigitos: accountLastFour.trim() || undefined, saldoInicial: initialBalance || undefined });
         setAccounts((current) => [...current, created]);
         setSelectedAccountId(created.id);
         setNotice(`Cuenta ${created.nombre} creada.`);
       }
-      setAccountName(""); setAccountEntity(""); setInitialBalance(""); setEditingAccountId(undefined);
+      setAccountName(""); setAccountEntity(""); setAccountLastFour(""); setInitialBalance(""); setEditingAccountId(undefined);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "No se pudo guardar la cuenta.");
     } finally { setAccountFormSaving(false); }
@@ -598,6 +601,10 @@ function App() {
                 <input value={accountEntity} onChange={(event) => setAccountEntity(event.target.value)} placeholder="Mercado Pago" />
               </label>
               <label className="form-field">
+                <span>Últimos 4 dígitos <small>(opcional)</small></span>
+                <input inputMode="numeric" pattern="[0-9]{4}" maxLength={4} value={accountLastFour} onChange={(event) => setAccountLastFour(event.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="5001" />
+              </label>
+              <label className="form-field">
                 <span>Tipo de cuenta</span>
                 <select value={accountType} onChange={(event) => setAccountType(event.target.value as TipoCuenta)}>
                   <option value="EFECTIVO">Efectivo</option>
@@ -624,14 +631,15 @@ function App() {
           <section className="connection-modal" aria-labelledby="accounts-title">
             <div className="section-heading"><h2 id="accounts-title">Mis cuentas</h2><button className="icon-button" type="button" aria-label="Cerrar" title="Cerrar" onClick={() => setIsAccountsOpen(false)}><X size={19} /></button></div>
             <div className="managed-accounts">
-              {accounts.map((account) => <article key={account.id}><strong>{account.nombre}</strong><span>{account.nombreEntidad ?? "Sin entidad OCR"} · {currency(account.saldoActual)}</span><button type="button" onClick={() => { setEditingAccountId(account.id); setAccountName(account.nombre); setAccountEntity(account.nombreEntidad ?? ""); }}>Editar</button></article>)}
+              {accounts.map((account) => <article key={account.id}><strong>{account.nombre}</strong><span>{account.nombreEntidad ?? "Sin entidad OCR"}{account.ultimosDigitos ? ` ···· ${account.ultimosDigitos}` : ""} · {currency(account.saldoActual)}</span><button type="button" onClick={() => { setEditingAccountId(account.id); setAccountName(account.nombre); setAccountEntity(account.nombreEntidad ?? ""); setAccountLastFour(account.ultimosDigitos ?? ""); }}>Editar</button></article>)}
             </div>
             <form className="form-field" onSubmit={submitManagedAccount}>
               <h3>{editingAccountId ? "Editar cuenta" : "Nueva cuenta"}</h3>
               <input required aria-label="Nombre de cuenta" value={accountName} onChange={(event) => setAccountName(event.target.value)} placeholder="Nombre visible" />
-              <input aria-label="Entidad para OCR" value={accountEntity} onChange={(event) => setAccountEntity(event.target.value)} placeholder="Entidad para OCR" />
+               <input aria-label="Entidad para OCR" value={accountEntity} onChange={(event) => setAccountEntity(event.target.value)} placeholder="Entidad para OCR" />
+               <input aria-label="Últimos 4 dígitos" inputMode="numeric" pattern="[0-9]{4}" maxLength={4} value={accountLastFour} onChange={(event) => setAccountLastFour(event.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="Últimos 4 dígitos" />
               {!editingAccountId ? <><select aria-label="Tipo de cuenta" value={accountType} onChange={(event) => setAccountType(event.target.value as TipoCuenta)}><option value="EFECTIVO">Efectivo</option><option value="BILLETERA_VIRTUAL">Billetera virtual</option><option value="CUENTA_BANCARIA">Cuenta bancaria</option><option value="TARJETA_CREDITO">Tarjeta de crédito</option></select><input aria-label="Saldo inicial" type="number" value={initialBalance} onChange={(event) => setInitialBalance(event.target.value)} placeholder="Saldo inicial" /></> : null}
-              <div className="modal-actions"><button type="button" onClick={() => { setEditingAccountId(undefined); setAccountName(""); setAccountEntity(""); }}>Limpiar</button><button className="primary-action" disabled={accountFormSaving} type="submit">{accountFormSaving ? "Guardando..." : editingAccountId ? "Guardar cambios" : "Crear cuenta"}</button></div>
+               <div className="modal-actions"><button type="button" onClick={() => { setEditingAccountId(undefined); setAccountName(""); setAccountEntity(""); setAccountLastFour(""); }}>Limpiar</button><button className="primary-action" disabled={accountFormSaving} type="submit">{accountFormSaving ? "Guardando..." : editingAccountId ? "Guardar cambios" : "Crear cuenta"}</button></div>
             </form>
           </section>
         </div>

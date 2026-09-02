@@ -62,11 +62,17 @@ async function resolverCuentaOCR(prisma: PrismaClient, textoCrudo: string): Prom
     where: { OR: [{ nombreEntidad: { not: null } }, { ultimosDigitos: { not: null } }] },
     select: { id: true, nombreEntidad: true, ultimosDigitos: true },
   });
+  const digits = textoCrudo.match(/(?:terminad[oa]s?\s+en|[*xX•#-]{2,})\s*(\d{4})/i)?.[1];
+  if (digits) {
+    const digitMatches = cuentas.filter((account) => account.ultimosDigitos === digits);
+    if (digitMatches.length === 1) return digitMatches[0].id;
+    if (digitMatches.length > 1) return undefined;
+  }
+
   const entityMatches = cuentas.filter((account) => account.nombreEntidad && texto.includes(normalizeEntity(account.nombreEntidad)));
   if (entityMatches.length === 1) return entityMatches[0].id;
   if (entityMatches.length > 1) return undefined;
 
-  const digits = textoCrudo.match(/(?:terminad[oa]s?\s+en|[*xX#-])\s*(\d{4})/i)?.[1];
   if (!digits) return undefined;
   const digitMatches = cuentas.filter((account) => account.ultimosDigitos === digits);
   return digitMatches.length === 1 ? digitMatches[0].id : undefined;
@@ -247,6 +253,19 @@ function parseDateValue(text: string | undefined): string | undefined {
   if (!Number.isNaN(candidate.getTime())) return candidate.toISOString();
 
   return undefined;
+}
+
+function normalizeOcrDate(fecha: string | null | undefined, textoCrudo: string): string | undefined {
+  const parsed = parseDateValue(fecha ?? undefined);
+  const match = textoCrudo.match(/\b(\d{1,2})[\/-](ene|feb|mar|abr|may|jun|jul|ago|sep|oct|nov|dic)\b/i);
+  if (!match) return parsed;
+
+  const months: Record<string, string> = {
+    ene: "01", feb: "02", mar: "03", abr: "04", may: "05", jun: "06",
+    jul: "07", ago: "08", sep: "09", oct: "10", nov: "11", dic: "12",
+  };
+  const year = new Date().getUTCFullYear();
+  return new Date(`${year}-${months[match[2].toLowerCase()]}-${match[1].padStart(2, "0")}T00:00:00.000Z`).toISOString();
 }
 
 function interpretarOCR(textoCrudo: string, fallback?: OCRFallbackData) {
@@ -694,7 +713,7 @@ export async function crearTransaccionOCR(
           monto: ai.monto == null ? undefined : String(ai.monto),
           categoria: ai.categoria ?? undefined,
           comercio: ai.comercio ?? undefined,
-          fecha: ai.fecha ?? undefined,
+          fecha: normalizeOcrDate(ai.fecha, data.textoCrudo),
           esTransferenciaAPersona: ai.esTransferenciaAPersona,
           exito: Boolean(ai.monto && ai.categoria),
         };
