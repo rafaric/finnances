@@ -33,6 +33,7 @@ import { toIngresoDTO } from "./dto/ingreso";
 import {
   confirmarInstanciaRecurrente,
   actualizarRecurrente,
+  eliminarRecurrente,
   crearRecurrente,
   generarInstanciaRecurrente,
   listarInstanciasRecurrentes,
@@ -1041,6 +1042,18 @@ export function buildApp(prisma: PrismaClient) {
     try {
       const { id } = z.object({ id: z.string() }).parse(request.params);
       return reply.send(await actualizarRecurrente(prisma, id, RecurrenteSchema.partial().parse(request.body)));
+    } catch (error) {
+      if (error instanceof ZodError) return fromZodError(reply, error);
+      if (error instanceof Error) return fromDomainError(reply, error);
+      return internalError(reply);
+    }
+  });
+
+  app.delete("/api/v1/recurrentes/:id", async (request, reply) => {
+    try {
+      const { id } = z.object({ id: z.string() }).parse(request.params);
+      await eliminarRecurrente(prisma, id);
+      return reply.code(204).send();
     } catch (error) {
       if (error instanceof ZodError) return fromZodError(reply, error);
       if (error instanceof Error) return fromDomainError(reply, error);

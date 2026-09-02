@@ -353,6 +353,10 @@ export function actualizarRecurrente(token: string, id: string, input: Actualiza
   return request<GastoRecurrenteResponseDTO>(token, `/api/v1/recurrentes/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(input) });
 }
 
+export function eliminarRecurrente(token: string, id: string): Promise<void> {
+  return request<void>(token, `/api/v1/recurrentes/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
 export function listarInstanciasRecurrentes(token: string, params?: { periodo?: string; estado?: "PROYECTADO" | "CONFIRMADO" | "OMITIDO" }): Promise<InstanciaRecurrenteResponseDTO[]> {
   const query = new URLSearchParams();
   if (params?.periodo) query.set("periodo", params.periodo);

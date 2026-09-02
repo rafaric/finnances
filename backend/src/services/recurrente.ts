@@ -99,6 +99,21 @@ export async function actualizarRecurrente(prisma: PrismaClient, recurrenteId: s
   });
 }
 
+export async function eliminarRecurrente(prisma: PrismaClient, recurrenteId: string) {
+  const recurrente = await prisma.gastoRecurrente.findUnique({
+    where: { id: recurrenteId },
+    include: { instancias: { select: { estado: true } } },
+  });
+  if (!recurrente) throw new Error("Recurrente no encontrado");
+  if (recurrente.instancias.some((instancia) => instancia.estado === EstadoInstanciaRecurrente.CONFIRMADO)) {
+    throw new Error("No se puede eliminar un recurrente con vencimientos confirmados");
+  }
+  await prisma.$transaction([
+    prisma.instanciaGastoRecurrente.deleteMany({ where: { gastoRecurrenteId: recurrenteId } }),
+    prisma.gastoRecurrente.delete({ where: { id: recurrenteId } }),
+  ]);
+}
+
 export function listarRecurrentes(prisma: PrismaClient, activo: boolean | undefined = true) {
   return prisma.gastoRecurrente.findMany({
     where: { ...(activo === undefined ? {} : { activo }), frecuencia: Frecuencia.MENSUAL },
@@ -170,7 +185,7 @@ export function listarInstanciasRecurrentes(
     return { gte: start, lt: end };
   })() : undefined;
   return prisma.instanciaGastoRecurrente.findMany({
-    where: { ...(dateFilter ? { fechaVencimiento: dateFilter } : {}), ...(filters.estado ? { estado: filters.estado } : {}) },
+    where: { ...(dateFilter ? { fechaVencimiento: dateFilter } : {}), ...(filters.estado ? { estado: filters.estado } : {}), OR: [{ gastoRecurrente: { activo: true } }, { estado: { not: EstadoInstanciaRecurrente.PROYECTADO }, gastoRecurrente: { activo: false } }] },
     include: { gastoRecurrente: { include: { cuenta: true, categoria: true, subcategoria: true } }, transaccion: true },
     orderBy: { fechaVencimiento: "asc" },
   });
