@@ -1,4 +1,4 @@
-import { EstadoTransaccion, PrismaClient, TipoCuenta } from "@prisma/client";
+import { EstadoInstanciaRecurrente, EstadoTransaccion, PrismaClient, TipoCuenta } from "@prisma/client";
 import calcularSaldo from "./saldo";
 import { obtenerRangoCiclo } from "./cicloFinanciero";
 
@@ -42,7 +42,7 @@ export async function calcularResumenMensual(
 ): Promise<ResumenMensualData> {
   const { start, end } = await obtenerRangoCiclo(prisma, periodo);
 
-  const [transacciones, ingresos, cuentas, cuotasProyectadas] = await Promise.all([
+  const [transacciones, ingresos, cuentas, cuotasProyectadas, instanciasRecurrentes] = await Promise.all([
     prisma.transaccion.findMany({
       where: {
         estado: EstadoTransaccion.CONFIRMADA,
@@ -57,6 +57,14 @@ export async function calcularResumenMensual(
     prisma.cuota.findMany({
       where: { fechaImputacion: { gte: start, lt: end }, estado: "PROYECTADO" },
       include: { compra: { include: { categoria: true } } },
+    }),
+    prisma.instanciaGastoRecurrente.findMany({
+      where: {
+        fechaVencimiento: { gte: start, lt: end },
+        estado: EstadoInstanciaRecurrente.PROYECTADO,
+        gastoRecurrente: { activo: true },
+      },
+      include: { gastoRecurrente: { include: { categoria: true } } },
     }),
   ]);
 
@@ -109,7 +117,8 @@ export async function calcularResumenMensual(
     }))
     .sort((a, b) => b.monto - a.monto);
 
-  const proyectadosTotal = cuotasProyectadas.reduce((sum, cuota) => sum + Number(cuota.monto), 0);
+  const proyectadosTotal = cuotasProyectadas.reduce((sum, cuota) => sum + Number(cuota.monto), 0)
+    + instanciasRecurrentes.reduce((sum, instancia) => sum + Number(instancia.monto ?? 0), 0);
   const proyectadosPorCategoriaMap = new Map<string, { categoria: CategoriaConNombre; monto: number }>();
   for (const cuota of cuotasProyectadas) {
     const categoria = cuota.compra.categoria;
@@ -118,6 +127,16 @@ export async function calcularResumenMensual(
     if (current) current.monto += Number(cuota.monto);
     else {
       proyectadosPorCategoriaMap.set(categoria.id, { categoria: { id: categoria.id, nombre: categoria.nombre, icono: categoria.icono, color: categoria.color, tipo: categoria.tipo }, monto: Number(cuota.monto) });
+    }
+  }
+  for (const instancia of instanciasRecurrentes) {
+    const categoria = instancia.gastoRecurrente.categoria;
+    if (!categoria) continue;
+    const monto = Number(instancia.monto ?? 0);
+    const current = proyectadosPorCategoriaMap.get(categoria.id);
+    if (current) current.monto += monto;
+    else {
+      proyectadosPorCategoriaMap.set(categoria.id, { categoria: { id: categoria.id, nombre: categoria.nombre, icono: categoria.icono, color: categoria.color, tipo: categoria.tipo }, monto });
     }
   }
   const gastosProyectadosPorCategoria = Array.from(proyectadosPorCategoriaMap.values()).map(({ categoria, monto }) => ({ categoria, monto: Number(monto.toFixed(2)), porcentaje: proyectadosTotal > 0 ? Number(((monto / proyectadosTotal) * 100).toFixed(2)) : 0 })).sort((a, b) => b.monto - a.monto);
