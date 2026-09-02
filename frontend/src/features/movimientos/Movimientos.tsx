@@ -93,7 +93,7 @@ export function Movimientos({ token, accounts, onRegisterExpense, onDataChanged 
     setIsLoading(true);
     setError(undefined);
     void listTransacciones(token, {
-      periodo,
+       periodo: periodo || undefined,
       cuentaId: cuentaId || undefined,
       categoriaId: categoriaId || undefined,
       estado: estado || undefined,
