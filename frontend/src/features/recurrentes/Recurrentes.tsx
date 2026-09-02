@@ -96,7 +96,17 @@ export function Recurrentes({ token, accounts }: RecurrentesProps) {
   const isCustomDay = ![1, 3, 5, 10, 15, 20, 25].includes(Number(day));
 
   function edit(item: GastoRecurrenteResponseDTO) {
-    setEditingId(item.id); setName(item.nombre); setAmount(item.montoFijo?.toFixed(2) ?? ""); setAmountType(item.tipoMonto); setAccountId(item.cuenta.id); setDay(String(item.diaDelMes)); setIsFormOpen(true);
+    setIsFormOpen(true);
+    setEditingId(item.id);
+    setName(item.nombre);
+    setAmount(item.montoFijo?.toFixed(2) ?? "");
+    setAmountType(item.tipoMonto);
+    setAccountId(item.cuenta?.id ?? "");
+    setCategoryId(item.categoria?.id);
+    setSubcategoryId(item.subcategoria?.id);
+    setDay(String(item.diaDelMes));
+    setNotes(item.notas ?? "");
+    setCustomDayOpen(false);
   }
 
   async function toggleActive(item: GastoRecurrenteResponseDTO) {
