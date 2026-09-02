@@ -101,7 +101,7 @@ export function Recurrentes({ token, accounts }: RecurrentesProps) {
     setIsFormOpen(true);
     setEditingId(item.id);
     setName(item.nombre);
-    setAmount(item.montoFijo?.toFixed(2) ?? "");
+    setAmount(item.montoFijo == null ? "" : Number(item.montoFijo).toFixed(2));
     setAmountType(item.tipoMonto);
     setAccountId(item.cuenta?.id ?? "");
     setCategoryId(item.categoria?.id);
