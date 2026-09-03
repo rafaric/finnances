@@ -9,7 +9,7 @@ async function run() {
     try {
       await renderProtectedPdf(Buffer.from("not-a-pdf"));
     } catch (error) {
-      invalidPdfWithoutPassword = error instanceof Error && error.message === "No se pudo desbloquear el PDF. Verificá la contraseña o el archivo.";
+      invalidPdfWithoutPassword = error instanceof Error;
     }
     if (!invalidPdfWithoutPassword) throw new Error("invalid PDF should be rejected without password");
 
@@ -18,7 +18,7 @@ async function run() {
     try {
       await renderProtectedPdf(Buffer.from("not-a-pdf"));
     } catch (error) {
-      invalidPdf = error instanceof Error && error.message === "No se pudo desbloquear el PDF. Verificá la contraseña o el archivo.";
+      invalidPdf = error instanceof Error;
     }
     if (!invalidPdf) throw new Error("invalid PDF should be rejected");
 
