@@ -45,6 +45,7 @@ import {
 import { crearCompra, eliminarCompra, listarCompras, listarCuotas } from "./services/compra";
 import { renderProtectedPdf } from "./services/procesarResumenPdf";
 import { analizarResumenConGemini } from "./services/geminiResumen";
+import { extraerTextoComprobantePdf } from "./services/geminiOCR";
 import { crearResumenDesdeGemini, listarResumens, reconciliarResumen } from "./services/resumen";
 import { listarCargosResumen, resolverCargoResumen } from "./services/cargoResumen";
 import { registrarPagoResumen } from "./services/pagoResumen";
@@ -634,6 +635,37 @@ export function buildApp(prisma: PrismaClient) {
       return reply.code(statusCode).send(await toTransaccionResponse(resultado));
     } catch (error) {
       if (error instanceof ZodError) return fromZodError(reply, error);
+      if (error instanceof Error) return fromDomainError(reply, error);
+      return internalError(reply);
+    }
+  });
+
+  app.post("/api/v1/gastos/ocr/pdf", async (request, reply) => {
+    try {
+      let cuentaId: string | undefined;
+      let idempotencyKey: string | undefined;
+      let pdfBuffer: Buffer | undefined;
+      let mimeType = "";
+      for await (const part of request.parts()) {
+        if (part.type === "field" && part.fieldname === "cuentaId") cuentaId = String(part.value);
+        if (part.type === "field" && part.fieldname === "idempotencyKey") idempotencyKey = String(part.value);
+        if (part.type === "file" && part.fieldname === "file") {
+          mimeType = part.mimetype;
+          pdfBuffer = await part.toBuffer();
+        }
+      }
+      if (!pdfBuffer) return reply.code(400).send({ code: "BAD_REQUEST", message: "Se requiere un archivo PDF" });
+      if (mimeType !== "application/pdf") return reply.code(400).send({ code: "BAD_REQUEST", message: "El archivo debe ser un PDF" });
+      if (!idempotencyKey) return reply.code(400).send({ code: "BAD_REQUEST", message: "Se requiere idempotencyKey" });
+      const rendered = await renderProtectedPdf(pdfBuffer);
+      if (rendered.pages.length > 2) return reply.code(400).send({ code: "BAD_REQUEST", message: "El comprobante PDF no puede superar 2 páginas" });
+      const textoCrudo = await extraerTextoComprobantePdf(rendered);
+      const resultado = await crearTransaccionOCR(prisma, { textoCrudo, cuentaId, idempotencyKey });
+      const statusCode = resultado.estado === "PENDIENTE_REVISION" || resultado.estado === "PENDIENTE_CATEGORIA" ? 202 : 201;
+      return reply.code(statusCode).send(await toTransaccionResponse(resultado));
+    } catch (error) {
+      if (error instanceof Error) console.error("Gasto PDF OCR failed:", error.message);
+      if (error instanceof Error && error.message.includes("FST_REQ_FILE_TOO_LARGE")) return reply.code(400).send({ code: "BAD_REQUEST", message: "El archivo PDF supera el límite de 15 MB" });
       if (error instanceof Error) return fromDomainError(reply, error);
       return internalError(reply);
     }

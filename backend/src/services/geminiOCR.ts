@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { RenderedPdf } from "./procesarResumenPdf";
 
 const GeminiOCRResultSchema = z.object({
   monto: z.number().positive().nullable(),
@@ -44,4 +45,22 @@ export async function interpretarConGemini(textoCrudo: string): Promise<GeminiOC
   });
 
   return parseGeminiOCRResponse(response.text ?? "");
+}
+
+export async function extraerTextoComprobantePdf(pdf: RenderedPdf): Promise<string> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error("GEMINI_API_KEY no está configurada");
+  const { GoogleGenAI } = await import("@google/genai");
+  const client = new GoogleGenAI({ apiKey });
+  const response = await client.models.generateContent({
+    model: process.env.GEMINI_MODEL ?? "gemini-flash-lite-latest",
+    contents: [{ role: "user", parts: [
+      { text: "Transcribí literalmente todo el texto visible de este comprobante de transferencia. No resumas, no inventes datos y conservá importes, fechas, nombres, alias, CBU/CVU y referencias." },
+      ...pdf.pages.map((page) => ({ inlineData: { mimeType: page.mimeType, data: page.data.toString("base64") } })),
+    ] }],
+    config: { temperature: 0, maxOutputTokens: 1200 },
+  });
+  const text = response.text?.trim();
+  if (!text) throw new Error("Gemini no pudo extraer texto del comprobante PDF");
+  return text;
 }
