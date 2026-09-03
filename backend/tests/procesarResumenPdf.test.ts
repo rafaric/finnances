@@ -5,13 +5,13 @@ async function run() {
 
   try {
     delete process.env.BANK_STATEMENT_PDF_PASSWORD;
-    let missingPassword = false;
+    let invalidPdfWithoutPassword = false;
     try {
       await renderProtectedPdf(Buffer.from("not-a-pdf"));
     } catch (error) {
-      missingPassword = error instanceof Error && error.message === "BANK_STATEMENT_PDF_PASSWORD no está configurada";
+      invalidPdfWithoutPassword = error instanceof Error && error.message === "No se pudo desbloquear el PDF. Verificá la contraseña o el archivo.";
     }
-    if (!missingPassword) throw new Error("missing password should be rejected");
+    if (!invalidPdfWithoutPassword) throw new Error("invalid PDF should be rejected without password");
 
     process.env.BANK_STATEMENT_PDF_PASSWORD = "test-password";
     let invalidPdf = false;
