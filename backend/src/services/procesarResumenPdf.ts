@@ -35,16 +35,21 @@ export async function renderProtectedPdf(input: Buffer): Promise<RenderedPdf> {
     await writeFile(sourcePath, input);
     try {
       const encryption = await execFileAsync("qpdf", ["--show-encryption", sourcePath]);
-      if (/not encrypted/i.test(encryption.stdout)) {
+      if (/not encrypted/i.test(`${encryption.stdout}\n${encryption.stderr}`)) {
         await copyFile(sourcePath, decryptedPath);
       } else {
         if (!password) throw pdfError("BANK_STATEMENT_PDF_PASSWORD no está configurada");
         await writeFile(passwordPath, password, { mode: 0o600 });
         await execFileAsync("qpdf", [`--password-file=${passwordPath}`, "--decrypt", sourcePath, decryptedPath]);
       }
-    } catch {
-      if (!password) throw pdfError("BANK_STATEMENT_PDF_PASSWORD no está configurada");
-      throw pdfError("No se pudo desbloquear el PDF. Verificá la contraseña o el archivo.");
+    } catch (error) {
+      if (error instanceof Error && error.message === "BANK_STATEMENT_PDF_PASSWORD no está configurada") throw error;
+      try {
+        await copyFile(sourcePath, decryptedPath);
+      } catch {
+        if (!password) throw pdfError("BANK_STATEMENT_PDF_PASSWORD no está configurada");
+        throw pdfError("No se pudo desbloquear el PDF. Verificá la contraseña o el archivo.");
+      }
     }
 
     try {
