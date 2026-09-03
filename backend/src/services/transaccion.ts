@@ -60,7 +60,7 @@ async function resolverCuentaOCR(prisma: PrismaClient, textoCrudo: string): Prom
   const texto = normalizeEntity(textoCrudo);
   const cuentas = await prisma.cuenta.findMany({
     where: { OR: [{ nombreEntidad: { not: null } }, { ultimosDigitos: { not: null } }] },
-    select: { id: true, nombreEntidad: true, ultimosDigitos: true },
+    select: { id: true, nombre: true, nombreEntidad: true, ultimosDigitos: true },
   });
   const digits = textoCrudo.match(/(?:terminad[oa]s?\s+en|[*xX•#-]{2,})\s*(\d{4})/i)?.[1];
   if (digits) {
@@ -71,11 +71,16 @@ async function resolverCuentaOCR(prisma: PrismaClient, textoCrudo: string): Prom
 
   const originText = texto.match(/cuenta\s+de\s+origen([\s\S]*?)(?:cuenta\s+de\s+destino|informaci[oó]n\s+de\s+la\s+operaci[oó]n|$)/i)?.[1];
   if (originText) {
-    const originMatches = cuentas.filter((account) => account.nombreEntidad && normalizeEntity(originText).includes(normalizeEntity(account.nombreEntidad)));
+    const normalizedOrigin = normalizeEntity(originText);
+    const originMatches = cuentas.filter((account) => [account.nombreEntidad, account.nombre]
+      .filter((value): value is string => Boolean(value))
+      .some((value) => normalizedOrigin.includes(normalizeEntity(value))));
     if (originMatches.length === 1) return originMatches[0].id;
   }
 
-  const entityMatches = cuentas.filter((account) => account.nombreEntidad && texto.includes(normalizeEntity(account.nombreEntidad)));
+  const entityMatches = cuentas.filter((account) => [account.nombreEntidad, account.nombre]
+    .filter((value): value is string => Boolean(value))
+    .some((value) => texto.includes(normalizeEntity(value))));
   if (entityMatches.length === 1) return entityMatches[0].id;
   if (entityMatches.length > 1) return undefined;
 
