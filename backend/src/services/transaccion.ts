@@ -69,6 +69,12 @@ async function resolverCuentaOCR(prisma: PrismaClient, textoCrudo: string): Prom
     if (digitMatches.length > 1) return undefined;
   }
 
+  const originText = texto.match(/cuenta\s+de\s+origen([\s\S]*?)(?:cuenta\s+de\s+destino|informaci[oó]n\s+de\s+la\s+operaci[oó]n|$)/i)?.[1];
+  if (originText) {
+    const originMatches = cuentas.filter((account) => account.nombreEntidad && normalizeEntity(originText).includes(normalizeEntity(account.nombreEntidad)));
+    if (originMatches.length === 1) return originMatches[0].id;
+  }
+
   const entityMatches = cuentas.filter((account) => account.nombreEntidad && texto.includes(normalizeEntity(account.nombreEntidad)));
   if (entityMatches.length === 1) return entityMatches[0].id;
   if (entityMatches.length > 1) return undefined;
