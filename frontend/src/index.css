@@ -56,6 +56,11 @@ select:focus-visible {
   line-height: 0.96;
   letter-spacing: -0.07em;
 }
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .eyebrow {
   margin: 0;
   color: #618073;

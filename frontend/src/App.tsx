@@ -12,7 +12,7 @@ import { Recurrentes } from "./features/recurrentes/Recurrentes";
 import { Tarjetas } from "./features/tarjetas/Tarjetas";
 import { currentPeriod } from "./lib/periods";
 import { enqueueOfflineOperation, listOfflineOperations, removeOfflineOperation, updateOfflineOperation, type QueuedOperation } from "./lib/offlineQueue";
-import { BarChart3, CreditCard, Home as HomeIcon, List, MoreHorizontal, PlugZap, Plus, Repeat2, Tags, WalletCards, X } from "lucide-react";
+import { BarChart3, CreditCard, Home as HomeIcon, List, MoreHorizontal, PlugZap, Plus, RefreshCw, Repeat2, Tags, WalletCards, X } from "lucide-react";
 import "./index.css";
 type Screen = "inicio" | "movimientos" | "nuevo" | "transferir" | "analisis" | "categorias" | "recurrentes" | "tarjetas";
 
@@ -471,7 +471,7 @@ function App() {
     <main className="app-shell" id="main-content">
       <header className={screen === "inicio" ? "topbar home-topbar" : "topbar compact-topbar"}>
          {screen === "inicio" ? <h1>Finnances</h1> : <h1>{screen === "nuevo" ? "Nueva transacción" : screen === "transferir" ? "Transferir" : screen === "movimientos" ? "Movimientos" : screen === "analisis" ? "Análisis" : screen === "recurrentes" ? "Gastos recurrentes" : screen === "tarjetas" ? "Tarjetas y resúmenes" : "Categorías"}</h1>}
-         {screen === "inicio" ? <button className="settings-button icon-button" type="button" aria-label="Configurar conexión" title="Configurar conexión" onClick={() => setIsConfigOpen(true)}><PlugZap size={19} strokeWidth={2.2} /></button> : null}
+         {screen === "inicio" ? <div className="topbar-actions"><button className="icon-button" type="button" aria-label="Actualizar datos" title="Actualizar datos" onClick={() => setSummaryRefreshVersion((current) => current + 1)}><RefreshCw size={18} strokeWidth={2.2} /></button><button className="settings-button icon-button" type="button" aria-label="Configurar conexión" title="Configurar conexión" onClick={() => setIsConfigOpen(true)}><PlugZap size={19} strokeWidth={2.2} /></button></div> : null}
       </header>
 
       {notice ? <p className="notice" role="status">{notice}</p> : null}
