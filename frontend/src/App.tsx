@@ -143,6 +143,19 @@ function App() {
   }, [connection.token, period, summaryRefreshVersion]);
 
   useEffect(() => {
+    if (!connection.token) return;
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") setSummaryRefreshVersion((current) => current + 1);
+    };
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [connection.token]);
+
+  useEffect(() => {
     if (!notice) return;
     const timeout = window.setTimeout(() => setNotice(undefined), 5000);
     return () => window.clearTimeout(timeout);

@@ -489,6 +489,7 @@ export function buildApp(prisma: PrismaClient) {
   app.get("/api/v1/resumen-mensual", async (request, reply) => {
     try {
       const { periodo } = ResumenMensualQuerySchema.parse(request.query);
+      await proyectarInstanciasDelPeriodo(prisma, periodo);
       const resumen = await calcularResumenMensual(prisma, periodo);
       return reply.send(toResumenMensualDTO(resumen));
     } catch (error) {
