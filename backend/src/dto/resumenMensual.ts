@@ -30,6 +30,8 @@ export interface ResumenMensualDTO {
   gastosPorCategoria: GastoCategoriaDTO[];
   disponibleLiquido: number;
   deudaTarjetas: number;
+  gastosProyectados: number;
+  gastosProyectadosPorCategoria: GastoCategoriaDTO[];
 }
 
 export function toResumenMensualDTO(data: ResumenMensualData): ResumenMensualDTO {
@@ -53,5 +55,17 @@ export function toResumenMensualDTO(data: ResumenMensualData): ResumenMensualDTO
     })),
     disponibleLiquido: data.disponibleLiquido,
     deudaTarjetas: data.deudaTarjetas,
+    gastosProyectados: data.gastosProyectados,
+    gastosProyectadosPorCategoria: data.gastosProyectadosPorCategoria.map((g: GastoCategoriaData) => ({
+      categoria: {
+        id: g.categoria.id,
+        nombre: g.categoria.nombre,
+        icono: g.categoria.icono,
+        color: g.categoria.color,
+        tipo: g.categoria.tipo,
+      },
+      monto: g.monto,
+      porcentaje: g.porcentaje,
+    })),
   };
 }
