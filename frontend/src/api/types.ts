@@ -211,6 +211,8 @@ export interface ResumenMensualDTO {
   disponibleLiquido: number;
   deudaTarjetas: number;
   gastosProyectados?: number;
+  gastosProyectadosCuotas?: number;
+  gastosProyectadosRecurrentes?: number;
   gastosProyectadosPorCategoria?: GastoCategoriaDTO[];
 }
 

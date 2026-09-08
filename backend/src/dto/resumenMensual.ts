@@ -31,6 +31,8 @@ export interface ResumenMensualDTO {
   disponibleLiquido: number;
   deudaTarjetas: number;
   gastosProyectados: number;
+  gastosProyectadosCuotas: number;
+  gastosProyectadosRecurrentes: number;
   gastosProyectadosPorCategoria: GastoCategoriaDTO[];
 }
 
@@ -56,6 +58,8 @@ export function toResumenMensualDTO(data: ResumenMensualData): ResumenMensualDTO
     disponibleLiquido: data.disponibleLiquido,
     deudaTarjetas: data.deudaTarjetas,
     gastosProyectados: data.gastosProyectados,
+    gastosProyectadosCuotas: data.gastosProyectadosCuotas,
+    gastosProyectadosRecurrentes: data.gastosProyectadosRecurrentes,
     gastosProyectadosPorCategoria: data.gastosProyectadosPorCategoria.map((g: GastoCategoriaData) => ({
       categoria: {
         id: g.categoria.id,

@@ -156,7 +156,7 @@ export function Home({
         <article>
           <span>Gastos proyectados</span>
           <strong>{isLoadingSummary ? <SkeletonLine className="skeleton-value" /> : summaryError ? "No disponible" : summary ? currency(summary.gastosProyectados ?? 0) : "Sin datos"}</strong>
-          <p>{isLoadingSummary ? <SkeletonLine className="skeleton-small" /> : "Cuotas con vencimiento en el período"}</p>
+           <p>{isLoadingSummary ? <SkeletonLine className="skeleton-small" /> : summary ? `Cuotas: ${currency(summary.gastosProyectadosCuotas ?? 0)} · Recurrentes: ${currency(summary.gastosProyectadosRecurrentes ?? 0)}` : "Cuotas y recurrentes del período"}</p>
         </article>
       </div>
       {summaryError ? <ErrorState message={summaryError} onRetry={onRetrySummary} /> : null}

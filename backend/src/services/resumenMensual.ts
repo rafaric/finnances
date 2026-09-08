@@ -33,6 +33,8 @@ export interface ResumenMensualData {
   disponibleLiquido: number;
   deudaTarjetas: number;
   gastosProyectados: number;
+  gastosProyectadosCuotas: number;
+  gastosProyectadosRecurrentes: number;
   gastosProyectadosPorCategoria: GastoCategoriaData[];
 }
 
@@ -119,6 +121,8 @@ export async function calcularResumenMensual(
 
   const proyectadosTotal = cuotasProyectadas.reduce((sum, cuota) => sum + Number(cuota.monto), 0)
     + instanciasRecurrentes.reduce((sum, instancia) => sum + Number(instancia.monto ?? 0), 0);
+  const gastosProyectadosCuotas = cuotasProyectadas.reduce((sum, cuota) => sum + Number(cuota.monto), 0);
+  const gastosProyectadosRecurrentes = instanciasRecurrentes.reduce((sum, instancia) => sum + Number(instancia.monto ?? 0), 0);
   const proyectadosPorCategoriaMap = new Map<string, { categoria: CategoriaConNombre; monto: number }>();
   for (const cuota of cuotasProyectadas) {
     const categoria = cuota.compra.categoria;
@@ -169,6 +173,8 @@ export async function calcularResumenMensual(
     disponibleLiquido: Number(disponibleLiquido.toFixed(2)),
     deudaTarjetas: Number(deudaTarjetas.toFixed(2)),
     gastosProyectados: Number(proyectadosTotal.toFixed(2)),
+    gastosProyectadosCuotas: Number(gastosProyectadosCuotas.toFixed(2)),
+    gastosProyectadosRecurrentes: Number(gastosProyectadosRecurrentes.toFixed(2)),
     gastosProyectadosPorCategoria,
   };
 }
