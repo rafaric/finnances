@@ -82,6 +82,7 @@ export function Home({
   async function loadRecurringInstances() {
     try {
       await proyectarRecurrentes(token, periodo);
+      onPendingChanged();
        setRecurringInstances(await listarInstanciasProximas(token, 4));
       setRecurringError(undefined);
     } catch (error) {
