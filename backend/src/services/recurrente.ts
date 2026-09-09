@@ -197,7 +197,7 @@ export async function listarInstanciasProximas(prisma: PrismaClient, dias: numbe
   end.setHours(23, 59, 59, 999);
   end.setDate(end.getDate() + dias);
   return prisma.instanciaGastoRecurrente.findMany({
-    where: { estado: EstadoInstanciaRecurrente.PROYECTADO, fechaVencimiento: { lte: end } },
+    where: { estado: EstadoInstanciaRecurrente.PROYECTADO, fechaVencimiento: { lte: end }, gastoRecurrente: { activo: true } },
     include: { gastoRecurrente: { include: { cuenta: true, categoria: true, subcategoria: true } }, transaccion: true },
     orderBy: { fechaVencimiento: "asc" },
   });

@@ -100,6 +100,12 @@ function App() {
   const [pendingItems, setPendingItems] = useState<TransaccionResponseDTO[]>([]);
   const [offlineOperations, setOfflineOperations] = useState<QueuedOperation[]>([]);
 
+  function switchTransactionType(nextType: "GASTO" | "INGRESO") {
+    setTransactionType(nextType);
+    setCategoriaId(undefined);
+    setSubcategoriaId(undefined);
+  }
+
   useEffect(() => {
     setSelectedPeriod(currentPeriod());
   }, []);
@@ -301,7 +307,8 @@ function App() {
     setAccountFormSaving(true);
     try {
       if (editingAccountId) {
-        const updated = await actualizarCuenta(connection.token, editingAccountId, { nombre: accountName.trim(), nombreEntidad: accountEntity.trim() || undefined, ultimosDigitos: accountLastFour.trim() || undefined });
+         const accountUpdate = { nombre: accountName.trim(), nombreEntidad: accountEntity.trim() || undefined, ...(accountLastFour.trim() ? { ultimosDigitos: accountLastFour.trim() } : {}) };
+         const updated = await actualizarCuenta(connection.token, editingAccountId, accountUpdate);
         setAccounts((current) => current.map((account) => account.id === updated.id ? updated : account));
         setNotice(`Cuenta ${updated.nombre} actualizada.`);
       } else {
@@ -486,8 +493,8 @@ function App() {
           summaryError={summaryError}
            onRetryAccounts={() => void loadAccounts(connection.token)}
            onRetrySummary={() => setSummaryRefreshVersion((current) => current + 1)}
-          onRegisterExpense={() => { setTransactionType("GASTO"); setCategoriaId(undefined); setSubcategoriaId(undefined); setScreen("nuevo"); }}
-           onRegisterIncome={() => { setTransactionType("INGRESO"); setScreen("nuevo"); }}
+           onRegisterExpense={() => { switchTransactionType("GASTO"); setScreen("nuevo"); }}
+            onRegisterIncome={() => { switchTransactionType("INGRESO"); setScreen("nuevo"); }}
            onRecurrentes={() => setScreen("recurrentes")}
            onTarjetas={() => setScreen("tarjetas")}
           onTransfer={() => {
@@ -541,7 +548,7 @@ function App() {
 
       {screen === "nuevo" ? (
         <form className="transaction-form" onSubmit={submitExpense}>
-           <div className="mode-toggle" aria-label="Tipo de movimiento"><button className={transactionType === "GASTO" ? "selected" : ""} type="button" onClick={() => setTransactionType("GASTO")}>Gasto</button><button className={transactionType === "INGRESO" ? "selected" : ""} type="button" onClick={() => setTransactionType("INGRESO")}>Ingreso</button></div>
+            <div className="mode-toggle" aria-label="Tipo de movimiento"><button className={transactionType === "GASTO" ? "selected" : ""} type="button" onClick={() => switchTransactionType("GASTO")}>Gasto</button><button className={transactionType === "INGRESO" ? "selected" : ""} type="button" onClick={() => switchTransactionType("INGRESO")}>Ingreso</button></div>
            <MoneyInput value={amount} onChange={setAmount} autoFocus />
 
            <div className="date-section">

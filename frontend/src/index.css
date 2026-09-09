@@ -170,7 +170,7 @@ select:focus-visible {
 }
 .period-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
 }
 .period-grid article,
@@ -996,6 +996,13 @@ fieldset {
   display: grid;
   border-top: 1px solid #d5e0da;
 }
+.movement-date-separator {
+  padding: 14px 2px 6px;
+  color: #60766b;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: capitalize;
+}
 .pagination {
   display: flex;
   align-items: center;
@@ -1221,7 +1228,7 @@ fieldset {
 }
 @media (min-width: 640px) {
   .movement-filters {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 .bottom-nav {

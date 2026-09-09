@@ -63,7 +63,7 @@ export function PendingWidget({ token, accounts, items, onChanged }: PendingWidg
     <section className="pending-widget">
       <div className="section-heading"><div><p className="eyebrow">PARA REVISAR</p><h2>Pendientes de confirmar</h2></div><strong>{items.length}</strong></div>
       <div className="pending-list">
-        {items.map((item) => <button className="pending-item" key={item.id} type="button" onClick={() => open(item)}><span>{item.esTransferenciaAPersona ? `Transferencia a ${item.comercio ?? "persona"}` : item.comercio ?? "Comprobante sin comercio"}</span><strong>{item.monto ? money(item.monto) : "Monto pendiente"}</strong><small>{item.estado === "PENDIENTE_CATEGORIA" ? "Falta categoría" : item.cuenta ? item.cuenta.nombre : "Falta cuenta o datos"}</small></button>)}
+         {items.map((item) => <button className="pending-item" key={item.id} type="button" onClick={() => open(item)}><span>{item.esTransferenciaAPersona ? `Transferencia a ${item.comercio ?? "persona"}` : item.comercio ?? "Comprobante sin comercio"}</span><strong>{item.monto ? money(item.monto) : "Monto pendiente"}</strong><small>{item.nota ? `${item.nota} · ` : ""}{item.estado === "PENDIENTE_CATEGORIA" ? "Falta categoría" : item.cuenta ? item.cuenta.nombre : "Falta cuenta o datos"}</small></button>)}
       </div>
       {selected ? (
         <div className="pending-editor">

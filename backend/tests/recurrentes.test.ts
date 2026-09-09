@@ -4,6 +4,7 @@ import {
   crearRecurrente,
   generarInstanciaRecurrente,
   omitirInstanciaRecurrente,
+  listarInstanciasProximas,
   proyectarInstanciasDelPeriodo,
 } from "../src/services/recurrente";
 
@@ -63,6 +64,8 @@ async function run() {
     await prisma.gastoRecurrente.update({ where: { id: variable.id }, data: { activo: false } });
     const pausedProjection = await proyectarInstanciasDelPeriodo(prisma, "2026-11");
     if (pausedProjection.some((instance) => instance.gastoRecurrenteId === variable.id)) throw new Error("paused recurring expense should not project");
+    const upcomingAfterPause = await listarInstanciasProximas(prisma, 365);
+    if (upcomingAfterPause.some((instance) => instance.gastoRecurrenteId === variable.id)) throw new Error("paused projected expense should not appear as upcoming");
 
     console.log("✓ recurrentes fijos y variables: projection, confirmation, idempotency and omission");
   } finally {

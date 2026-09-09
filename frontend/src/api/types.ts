@@ -106,7 +106,7 @@ export interface GastoRecurrenteResponseDTO {
   categoria: CategoriaResponseDTO;
   subcategoria?: SubcategoriaResponseDTO;
   frecuencia: FrecuenciaRecurrente;
-  diaDelMes: number;
+  diaDelMes?: number;
   notas?: string;
   activo: boolean;
 }

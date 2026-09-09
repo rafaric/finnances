@@ -21,6 +21,7 @@ import { LoadingState } from "../../components/LoadingState";
 import { MoneyInput } from "../../components/MoneyInput";
 import { PeriodPills } from "../../components/PeriodPills";
 import { currentPeriod } from "../../lib/periods";
+import { sortActiveRecurrentes } from "./sortRecurrentes";
 
 interface RecurrentesProps {
   token: string;
@@ -31,7 +32,8 @@ function currency(value: number): string {
   return new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(Number(value));
 }
 
-function daysUntilDue(day: number): string {
+function daysUntilDue(day: number | undefined): string {
+  if (!day) return "Sin vencimiento definido";
   const today = new Date();
   const lastDayThisMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
   const dueThisMonth = new Date(today.getFullYear(), today.getMonth(), Math.min(day, lastDayThisMonth));
@@ -65,6 +67,8 @@ export function Recurrentes({ token, accounts }: RecurrentesProps) {
   const [instanceDates, setInstanceDates] = useState<Record<string, string>>({});
   const [periodo, setPeriodo] = useState(() => currentPeriod());
   const [instanceStatus, setInstanceStatus] = useState<"TODOS" | "PROYECTADO" | "CONFIRMADO" | "OMITIDO">("TODOS");
+  const activeItems = sortActiveRecurrentes(items.filter((item) => item.activo));
+  const inactiveItems = items.filter((item) => !item.activo);
 
   async function load() {
     setIsLoading(true);
@@ -152,9 +156,8 @@ export function Recurrentes({ token, accounts }: RecurrentesProps) {
       </section>
     </div> : null}
     {isLoading ? <LoadingState label="Cargando recurrentes..." /> : error ? <ErrorState message={error} onRetry={() => void load()} /> : <>
-       <section className="recurring-rules"><div className="section-heading"><div><p className="eyebrow">REGLAS ACTIVAS</p><h2>Compromisos</h2></div></div><div className="recurrente-list">{items.filter((item) => item.activo).length ? items.filter((item) => item.activo).map((item) => <article className="recurrente-card" key={item.id}><div><strong>{item.nombre}</strong><span>{daysUntilDue(item.diaDelMes)} · {item.tipoMonto === "VARIABLE" ? "Importe variable" : currency(item.montoFijo ?? 0)}</span></div><div><button type="button" onClick={() => edit(item)}>Editar</button><button type="button" onClick={() => void toggleActive(item)}>Pausar</button></div></article>) : <p className="empty-page">No hay reglas activas.</p>}</div><div className="section-heading"><div><p className="eyebrow">REGLAS PAUSADAS</p><h2>Inactivas</h2></div></div><div className="recurrente-list paused-rules">{items.filter((item) => !item.activo).length ? items.filter((item) => !item.activo).map((item) => <article className="recurrente-card" key={item.id}><div><strong>{item.nombre}</strong><span>Sin nuevas proyecciones</span></div><button type="button" onClick={() => void toggleActive(item)}>Reactivar</button></article>) : <p className="empty-page">No hay reglas pausadas.</p>}</div></section>
+        <section className="recurring-rules"><div className="section-heading"><div><p className="eyebrow">REGLAS ACTIVAS</p><h2>Compromisos</h2></div></div><div className="recurrente-list">{activeItems.length ? activeItems.map((item) => <article className="recurrente-card" key={item.id}><div><strong>{item.nombre}</strong><span>{daysUntilDue(item.diaDelMes)} · {item.tipoMonto === "VARIABLE" ? "Importe variable" : currency(item.montoFijo ?? 0)}</span></div><div><button type="button" onClick={() => edit(item)}>Editar</button><button type="button" onClick={() => void toggleActive(item)}>Pausar</button></div></article>) : <p className="empty-page">No hay reglas activas.</p>}</div><div className="section-heading"><div><p className="eyebrow">REGLAS PAUSADAS</p><h2>Inactivas</h2></div></div><div className="recurrente-list paused-rules">{inactiveItems.length ? inactiveItems.map((item) => <article className="recurrente-card" key={item.id}><div><strong>{item.nombre}</strong><span>Sin nuevas proyecciones</span></div><div><button type="button" onClick={() => void toggleActive(item)}>Reactivar</button><button type="button" onClick={() => void remove(item)}>Eliminar</button></div></article>) : <p className="empty-page">No hay reglas pausadas.</p>}</div></section>
        <section className="recurring-instances"><div className="section-heading"><div><p className="eyebrow">HISTORIAL</p><h2>Vencimientos</h2></div></div><PeriodPills value={periodo} onChange={setPeriodo} /><div className="movement-type-pills" aria-label="Estado de instancia"><button className={instanceStatus === "TODOS" ? "active" : ""} type="button" onClick={() => setInstanceStatus("TODOS")}>Todos</button>{(["PROYECTADO", "CONFIRMADO", "OMITIDO"] as const).map((status) => <button className={instanceStatus === status ? "active" : ""} key={status} type="button" onClick={() => setInstanceStatus(status)}>{status === "PROYECTADO" ? "Pendientes" : status === "CONFIRMADO" ? "Confirmados" : "Omitidos"}</button>)}</div>{instances.length ? instances.map((instance) => <article className="recurring-instance-row" key={instance.id}><div><strong>{instance.gastoRecurrente.nombre}</strong><span>{new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "short" }).format(new Date(instance.fechaVencimiento))} · {instance.gastoRecurrente.tipoMonto === "VARIABLE" && instance.monto == null ? "Importe pendiente" : currency(instance.monto ?? 0)}</span></div>{instance.estado === "PROYECTADO" ? <><input aria-label={`Importe ${instance.gastoRecurrente.nombre}`} type="number" min="0.01" step="0.01" placeholder={instance.gastoRecurrente.tipoMonto === "VARIABLE" ? "Importe real" : undefined} value={instanceAmounts[instance.id] ?? ""} onChange={(event) => setInstanceAmounts((current) => ({ ...current, [instance.id]: event.target.value }))} /><input aria-label={`Fecha ${instance.gastoRecurrente.nombre}`} type="date" value={instanceDates[instance.id] ?? ""} onChange={(event) => setInstanceDates((current) => ({ ...current, [instance.id]: event.target.value }))} /><button type="button" onClick={() => void confirmInstance(instance)}>Confirmar</button><button type="button" onClick={() => void omitInstance(instance.id)}>Omitir</button></> : <span>{instance.estado === "CONFIRMADO" ? "Confirmado" : "Omitido"}</span>}</article>) : <p className="empty-page">No hay instancias para este filtro.</p>}</section>
-       <section className="recurring-rules paused-rules"><div className="section-heading"><div><p className="eyebrow">GESTION</p><h2>Eliminar reglas pausadas</h2></div></div><div className="recurrente-list">{items.filter((item) => !item.activo).map((item) => <article className="recurrente-card" key={`delete-${item.id}`}><div><strong>{item.nombre}</strong><span>Elimina también sus proyecciones pendientes</span></div><button type="button" onClick={() => void remove(item)}>Eliminar</button></article>)}</div></section>
      </>}
   </section>;
 }

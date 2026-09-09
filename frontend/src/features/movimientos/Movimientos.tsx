@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { ArrowLeftRight, Check, CreditCard, Funnel, PenLine, ReceiptText, RefreshCw, Trash2, X, Zap } from "lucide-react";
+import { ArrowLeftRight, Check, CreditCard, Funnel, Keyboard, PenLine, ReceiptText, RefreshCw, Trash2, X, Zap } from "lucide-react";
 import { editarGasto, eliminarGasto, listCategorias, listTransacciones, listTransferencias } from "../../api/client";
 import type {
   CuentaResponseDTO,
@@ -49,7 +49,7 @@ function formatDate(value: string): string {
 
 function originMeta(origin: TransaccionResponseDTO["origen"]) {
   switch (origin) {
-    case "MANUAL": return { label: "Manual", icon: <PenLine aria-hidden="true" /> };
+    case "MANUAL": return { label: "Manual", icon: <Keyboard aria-hidden="true" /> };
     case "OCR_IA": return { label: "OCR", icon: <Zap aria-hidden="true" /> };
     case "APPLE_PAY": return { label: "Apple Pay", icon: <Zap aria-hidden="true" /> };
     case "RECURRENTE_CONFIRMADO": return { label: "Recurrente", icon: <RefreshCw aria-hidden="true" /> };
@@ -117,14 +117,14 @@ export function Movimientos({ token, accounts, onRegisterExpense, onDataChanged 
   }, [categoriaId, cuentaId, estado, page, periodo, reloadVersion, tipo, token]);
 
   useEffect(() => {
-    if (tipo) {
+    if (tipo || categoriaId) {
       setTransferencias([]);
       return;
     }
     void listTransferencias(token, { periodo: periodo || undefined, cuentaId: cuentaId || undefined })
       .then(setTransferencias)
       .catch(() => setTransferencias([]));
-  }, [cuentaId, periodo, reloadVersion, tipo, token]);
+  }, [categoriaId, cuentaId, periodo, reloadVersion, tipo, token]);
 
   const hasFilters = Boolean(cuentaId || categoriaId || estado || tipo || periodo !== defaultPeriod);
   const unifiedItems = [
@@ -201,7 +201,7 @@ export function Movimientos({ token, accounts, onRegisterExpense, onDataChanged 
       <div className="movement-toolbar">
         <PeriodPills value={periodo} onChange={(nextPeriod) => { setPeriodo(nextPeriod); setPage(1); }} includeAll />
         <div className="movement-actions">
-           <button className={isFiltersOpen ? "filter-button active" : "filter-button"} type="button" aria-label="Filtrar movimientos" title="Filtrar movimientos" aria-expanded={isFiltersOpen} onClick={() => setIsFiltersOpen((current) => !current)}><Funnel size={18} aria-hidden="true" /></button>
+           <button className={isFiltersOpen ? "filter-button active" : "filter-button"} type="button" aria-label="Filtrar" title="Filtrar movimientos" aria-expanded={isFiltersOpen} onClick={() => setIsFiltersOpen((current) => !current)}><Funnel size={18} aria-hidden="true" /></button>
           {hasFilters ? <button className="clear-filters-button" type="button" onClick={clearFilters}>Limpiar filtros</button> : null}
         </div>
       </div>
@@ -246,14 +246,14 @@ export function Movimientos({ token, accounts, onRegisterExpense, onDataChanged 
        {!isLoading && !error && unifiedItems.length ? (
          <>
             <div className="movement-list">
-              {unifiedItems.map((item) => { if (item.kind === "transaction") { const transaction = item.value; return (
+               {unifiedItems.map((item, index) => { const dateKey = item.value.fecha.slice(0, 10); const previousDateKey = unifiedItems[index - 1]?.value.fecha.slice(0, 10); const separator = dateKey !== previousDateKey ? <div className="movement-date-separator" role="separator"><span>{formatDate(item.value.fecha)}</span></div> : null; if (item.kind === "transaction") { const transaction = item.value; const detail = transaction.comercio?.trim() || transaction.nota?.trim() || transaction.subcategoria?.nombre; return (<>{separator}
                 <article className="movement-row" key={transaction.id}>
                   <div className="movement-main">
                     <span className={`movement-category-mark category-color-${transaction.categoria?.color.toLowerCase() ?? "blanco"}`} aria-hidden="true"><CategoryIcon icon={transaction.categoria?.icono ?? "OTRO"} color={transaction.categoria?.color} /></span>
                     <div className="movement-copy">
                       <div className="movement-title"><strong>{transaction.categoria?.nombre ?? "Sin categoría"}</strong><span className={`movement-origin movement-origin-${transaction.origen.toLowerCase()}`} title={originMeta(transaction.origen).label}>{originMeta(transaction.origen).icon}<span className="sr-only">{originMeta(transaction.origen).label}</span></span></div>
-                        <span className="movement-meta">{transaction.cuenta?.nombre ?? "Cuenta sin resolver"} · {formatDate(transaction.fecha)}</span>
-                        {transaction.nota ? <span className="movement-note">{transaction.nota}</span> : null}
+                         <span className="movement-meta">{transaction.cuenta?.nombre ?? "Cuenta sin resolver"}</span>
+                         {detail ? <span className="movement-note">{detail}</span> : null}
                     </div>
                   </div>
                   <div className="movement-amount">
@@ -262,17 +262,17 @@ export function Movimientos({ token, accounts, onRegisterExpense, onDataChanged 
                     {transaction.monto < 0 && (transaction.origen === "MANUAL" || transaction.origen === "OCR_IA") ? <div className="movement-actions"><button type="button" aria-label="Editar gasto" title="Editar gasto" onClick={() => openEditor(transaction)}><PenLine aria-hidden="true" /></button><button type="button" aria-label="Eliminar gasto" title="Eliminar gasto" onClick={() => setDeletingTransaction(transaction)}><Trash2 aria-hidden="true" /></button></div> : null}
                   </div>
                 </article>
-              ); } const transferencia = item.value; return (
+               </>); } const transferencia = item.value; return (<>{separator}
                 <article className="movement-row transfer-row" key={transferencia.id}>
                   <div className="movement-main"><span className="movement-category-mark category-color-azul" aria-hidden="true"><ArrowLeftRight /></span><div className="movement-copy"><div className="movement-title"><strong>{transferencia.cuentaOrigen.nombre} → {transferencia.cuentaDestino.nombre}</strong><span className="movement-origin" title="Transferencia"><ArrowLeftRight aria-hidden="true" /><span className="sr-only">Transferencia</span></span></div><span className="movement-meta">{formatDate(transferencia.fecha)}</span>{transferencia.nota ? <span className="movement-note">{transferencia.nota}</span> : null}</div></div>
                   <div className="movement-amount"><strong className="transfer-amount">{formatCurrency(transferencia.monto)}</strong><span className="movement-status">Movimiento interno</span></div>
-                </article>
-              ); })}
+               </article></>);
+               })}
             </div>
             {result?.hasNextPage ? <div className="load-more"><span>{result.items.length} movimientos cargados</span><button className="primary-action" type="button" disabled={isLoading} onClick={() => setPage((current) => current + 1)}>{isLoading ? "Cargando..." : "Cargar más"}</button></div> : <p className="movement-end">Mostrando todos los movimientos de este filtro</p>}
           </>
         ) : null}
-       {editingTransaction ? <div className="modal-backdrop" role="presentation"><form className="connection-modal movement-edit-modal" role="dialog" aria-modal="true" aria-labelledby="edit-expense-title" onSubmit={saveEdit}><div className="section-heading"><h2 id="edit-expense-title">Editar gasto</h2><button className="icon-button" type="button" aria-label="Cerrar" onClick={() => setEditingTransaction(undefined)}><X size={18} /></button></div><label className="form-field"><span>Monto</span><input required inputMode="decimal" value={editAmount} onChange={(event) => setEditAmount(event.target.value)} /></label><label className="form-field"><span>Fecha</span><input required type="date" value={editDate} onChange={(event) => setEditDate(event.target.value)} /></label><label className="form-field"><span>Cuenta</span><select required value={editAccountId} onChange={(event) => setEditAccountId(event.target.value)}>{accounts.map((account) => <option key={account.id} value={account.id}>{account.nombre}</option>)}</select></label><CategorySelector token={token} tipo="GASTO" categoriaId={editCategoryId} subcategoriaId={editSubcategoryId} onCategoriaChange={(next) => { setEditCategoryId(next); setEditSubcategoryId(undefined); }} onSubcategoriaChange={setEditSubcategoryId} /><label className="form-field"><span>Nota o comercio</span><input maxLength={60} value={editMerchant} onChange={(event) => setEditMerchant(event.target.value)} /></label><div className="modal-actions"><button type="button" onClick={() => setEditingTransaction(undefined)}>Cancelar</button><button className="primary-action" type="submit" disabled={isSavingEdit}>{isSavingEdit ? "Guardando..." : "Guardar cambios"}</button></div></form></div> : null}
+        {editingTransaction ? <div className="modal-backdrop" role="presentation"><form className="connection-modal movement-edit-modal" role="dialog" aria-modal="true" aria-labelledby="edit-expense-title" onSubmit={saveEdit}><div className="section-heading"><h2 id="edit-expense-title">Editar gasto</h2><button className="icon-button" type="button" aria-label="Cerrar" onClick={() => setEditingTransaction(undefined)}><X size={18} /></button></div><label className="form-field"><span>Monto</span><input required inputMode="decimal" value={editAmount} onChange={(event) => setEditAmount(event.target.value)} /></label><label className="form-field"><span>Fecha</span><input required type="date" value={editDate} onChange={(event) => setEditDate(event.target.value)} /></label><label className="form-field"><span>Cuenta</span><select required value={editAccountId} onChange={(event) => setEditAccountId(event.target.value)}>{accounts.map((account) => <option key={account.id} value={account.id}>{account.nombre}</option>)}</select></label><CategorySelector token={token} tipo="GASTO" categoriaId={editCategoryId} subcategoriaId={editSubcategoryId} onCategoriaChange={(next) => { setEditCategoryId(next); setEditSubcategoryId(undefined); }} onSubcategoriaChange={setEditSubcategoryId} /><label className="form-field"><span>Comercio</span><input maxLength={60} value={editMerchant} onChange={(event) => setEditMerchant(event.target.value)} /></label><label className="form-field"><span>Nota</span><input maxLength={120} value={editNote} onChange={(event) => setEditNote(event.target.value)} /></label><div className="modal-actions"><button type="button" onClick={() => setEditingTransaction(undefined)}>Cancelar</button><button className="primary-action" type="submit" disabled={isSavingEdit}>{isSavingEdit ? "Guardando..." : "Guardar cambios"}</button></div></form></div> : null}
        {deletingTransaction ? <div className="modal-backdrop" role="presentation"><section className="connection-modal" role="dialog" aria-modal="true" aria-labelledby="delete-expense-title"><div className="section-heading"><h2 id="delete-expense-title">Eliminar gasto</h2><button className="icon-button" type="button" aria-label="Cerrar" onClick={() => setDeletingTransaction(undefined)}><X size={18} /></button></div><p>¿Querés eliminar el gasto de <strong>{formatCurrency(deletingTransaction.monto)}</strong> del <strong>{formatDate(deletingTransaction.fecha)}</strong>?</p><p>Esta acción actualizará el saldo de la cuenta y no se puede deshacer.</p><div className="modal-actions"><button type="button" onClick={() => setDeletingTransaction(undefined)}>Cancelar</button><button className="danger-action" type="button" onClick={() => void removeTransaction(deletingTransaction)}>Eliminar gasto</button></div></section></div> : null}
      </section>
   );
