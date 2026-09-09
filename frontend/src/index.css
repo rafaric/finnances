@@ -992,6 +992,13 @@ fieldset {
 .movement-filters .form-field select {
   min-height: 42px;
 }
+.home-attention > summary {
+  cursor: pointer;
+  list-style: none;
+}
+.home-attention > summary::-webkit-details-marker {
+  display: none;
+}
 .movement-list {
   display: grid;
   border-top: 1px solid #d5e0da;
