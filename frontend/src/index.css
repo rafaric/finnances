@@ -999,6 +999,35 @@ fieldset {
 .home-attention > summary::-webkit-details-marker {
   display: none;
 }
+.home-attention-chevron {
+  display: inline-block;
+  margin-left: 4px;
+  vertical-align: middle;
+  transition: transform 180ms ease;
+}
+.home-attention:not([open]) .home-attention-chevron {
+  transform: rotate(-90deg);
+}
+.home-attention-content {
+  display: grid;
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transition: grid-template-rows 220ms ease, opacity 180ms ease;
+}
+.home-attention:not([open]) .home-attention-content {
+  grid-template-rows: 0fr;
+  opacity: 0;
+}
+.home-attention-content > * {
+  min-height: 0;
+  overflow: hidden;
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-attention-chevron,
+  .home-attention-content {
+    transition: none;
+  }
+}
 .movement-list {
   display: grid;
   border-top: 1px solid #d5e0da;
