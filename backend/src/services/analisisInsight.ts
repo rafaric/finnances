@@ -19,7 +19,12 @@ function hashResumen(resumen: ResumenMensualData): string {
 function deterministicFallback(resumen: ResumenMensualData): string {
   if (!resumen.gastosPorCategoria.length) return "Todavía no hay suficientes movimientos confirmados para describir este período.";
   const leading = resumen.gastosPorCategoria[0];
-  return `${leading.categoria.nombre} representa ${leading.porcentaje.toFixed(0)}% de los gastos confirmados del período. Esta lectura describe los datos disponibles y no constituye una recomendación.`;
+  const periodState = isCurrentPeriod(resumen.periodo) ? "en curso" : "completado";
+  return `${leading.categoria.nombre} representa ${leading.porcentaje.toFixed(0)}% de los gastos confirmados del período ${periodState}. Esta lectura describe los datos disponibles y no constituye una recomendación.`;
+}
+
+function isCurrentPeriod(periodo: string): boolean {
+  return periodo === new Date().toISOString().slice(0, 7);
 }
 
 function toDTO(insight: {
@@ -45,7 +50,7 @@ async function generateWithGemini(resumen: ResumenMensualData): Promise<string> 
   const client = new GoogleGenAI({ apiKey });
   const response = await client.models.generateContent({
     model: process.env.GEMINI_MODEL ?? "gemini-flash-lite-latest",
-    contents: `Redactá una única observación financiera descriptiva y prudente en español rioplatense, de máximo 240 caracteres. Usá solamente los datos JSON provistos. No recomiendes acciones, no juzgues hábitos, no inventes comparaciones y no menciones que sos una IA. Si no hay datos suficientes, indicá exactamente eso. JSON: ${JSON.stringify({ periodo: resumen.periodo, ingresos: resumen.ingresos, gastos: resumen.gastos, ahorro: resumen.ahorro, margen: resumen.margen, gastosPorCategoria: resumen.gastosPorCategoria.slice(0, 5), gastosProyectados: resumen.gastosProyectados })}`,
+    contents: `Redactá una única observación financiera descriptiva y prudente en español rioplatense, de máximo 240 caracteres. El período está ${isCurrentPeriod(resumen.periodo) ? "en curso" : "completado"}; nunca lo describas como cerrado o final si está en curso. Usá solamente los datos JSON provistos. No recomiendes acciones, no juzgues hábitos, no inventes comparaciones y no menciones que sos una IA. JSON: ${JSON.stringify({ periodo: resumen.periodo, ingresos: resumen.ingresos, gastos: resumen.gastos, ahorro: resumen.ahorro, margen: resumen.margen, gastosPorCategoria: resumen.gastosPorCategoria.slice(0, 5), gastosProyectados: resumen.gastosProyectados, cierreEstimado: resumen.cierreEstimado })}`,
     config: { temperature: 0, maxOutputTokens: 120 },
   });
   const content = response.text?.trim();
@@ -61,6 +66,9 @@ export async function getAnalisisInsight(prisma: PrismaClient, periodo: string):
   if (!current) {
     const created = await prisma.analisisInsight.create({ data: { periodo, contenido: "", estado: EstadoInsight.INVALIDADO, huellaDatos: hash } });
     return toDTO(created);
+  }
+  if (current.huellaDatos !== hash && current.estado !== EstadoInsight.INVALIDADO) {
+    return toDTO(await prisma.analisisInsight.update({ where: { id: current.id }, data: { estado: EstadoInsight.INVALIDADO, huellaDatos: hash, invalidadoEn: new Date() } }));
   }
   return toDTO(current);
 }

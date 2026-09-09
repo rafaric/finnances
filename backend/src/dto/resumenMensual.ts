@@ -34,6 +34,8 @@ export interface ResumenMensualDTO {
   gastosProyectadosCuotas: number;
   gastosProyectadosRecurrentes: number;
   gastosProyectadosPorCategoria: GastoCategoriaDTO[];
+  gastosProyectadosRecurrentesNoEstimados: number;
+  cierreEstimado: number;
 }
 
 export function toResumenMensualDTO(data: ResumenMensualData): ResumenMensualDTO {
@@ -71,5 +73,7 @@ export function toResumenMensualDTO(data: ResumenMensualData): ResumenMensualDTO
       monto: g.monto,
       porcentaje: g.porcentaje,
     })),
+    gastosProyectadosRecurrentesNoEstimados: data.gastosProyectadosRecurrentesNoEstimados,
+    cierreEstimado: data.cierreEstimado,
   };
 }

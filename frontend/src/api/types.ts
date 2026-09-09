@@ -214,6 +214,8 @@ export interface ResumenMensualDTO {
   gastosProyectadosCuotas?: number;
   gastosProyectadosRecurrentes?: number;
   gastosProyectadosPorCategoria?: GastoCategoriaDTO[];
+  gastosProyectadosRecurrentesNoEstimados?: number;
+  cierreEstimado?: number;
 }
 
 export type EstadoAnalisisInsight = "INVALIDADO" | "GENERANDO" | "DISPONIBLE" | "ERROR";

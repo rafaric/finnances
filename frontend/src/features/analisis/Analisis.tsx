@@ -106,17 +106,19 @@ export function Analisis({ token, initialPeriod }: AnalisisProps) {
       {!isLoading && error ? <ErrorState message={error} /> : null}
       {!isLoading && !error && summary ? (
         <>
-          <section className="analysis-intro">
+           <section className="analysis-intro">
             <div><p className="eyebrow">LECTURA DEL PERÍODO</p><h2>Una vista clara de tus números</h2><p>Descripción basada únicamente en movimientos confirmados. Sin recomendaciones.</p></div>
-            <button className="secondary-button" type="button" onClick={() => void handleRefresh()} disabled={isRefreshingInsight}>{isRefreshingInsight ? "Actualizando..." : "Actualizar análisis"}</button>
-          </section>
+             <button className="secondary-button" type="button" onClick={() => void handleRefresh()} disabled={isRefreshingInsight}>{isRefreshingInsight ? "Actualizando..." : "Actualizar análisis"}</button>
+           </section>
+           <p className="analysis-period-status">Período {periodo === new Date().toISOString().slice(0, 7) ? "en curso" : "completado"}. Los importes proyectados son estimaciones y no movimientos confirmados.</p>
           <section className="analysis-reading"><span className="analysis-reading-mark" aria-hidden="true"><Sparkles size={19} /></span><div><strong>{insightError ? "No se pudo cargar la lectura automática." : insight?.estado === "DISPONIBLE" && insight.contenido ? insight.contenido : insight?.estado === "GENERANDO" ? "Preparando la lectura del período..." : descriptiveReading}</strong><p>{insightError ? "Revisá la conexión o intentá actualizar nuevamente." : insight?.generadoEn ? `Actualizado ${new Intl.DateTimeFormat("es-AR", { dateStyle: "short", timeStyle: "short" }).format(new Date(insight.generadoEn))}. Lectura descriptiva, sin recomendaciones.` : "Lectura descriptiva, sin recomendaciones."}</p></div></section>
-          <div className="analysis-metrics">
+           <div className="analysis-metrics">
             <article><span>Ingresos</span><strong>{currency(summary.ingresos)}</strong></article>
             <article><span>Gastos</span><strong>{currency(summary.gastos)}</strong></article>
             <article><span>Ahorro</span><strong>{currency(summary.ahorro)}</strong></article>
             <article><span>Margen</span><strong>{summary.margen.toFixed(2)}%</strong></article>
-          </div>
+           </div>
+           {summary.cierreEstimado !== undefined ? <p className="analysis-period-status">Cierre estimado: <strong>{currency(summary.cierreEstimado)}</strong>{summary.gastosProyectadosRecurrentesNoEstimados ? ` · ${summary.gastosProyectadosRecurrentesNoEstimados} recurrente${summary.gastosProyectadosRecurrentesNoEstimados === 1 ? "" : "s"} variable${summary.gastosProyectadosRecurrentesNoEstimados === 1 ? "" : "s"} sin estimar por falta de historial.` : ""}</p> : null}
 
           <section className="analysis-section analysis-category-section">
             <div className="section-heading">
