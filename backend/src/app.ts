@@ -45,7 +45,7 @@ import {
 import { crearCompra, eliminarCompra, listarCompras, listarCuotas } from "./services/compra";
 import { renderProtectedPdf } from "./services/procesarResumenPdf";
 import { analizarResumenConGemini } from "./services/geminiResumen";
-import { extraerTextoComprobantePdf } from "./services/geminiOCR";
+import { extraerTextoComprobantePdf, interpretarComprobanteImagen } from "./services/geminiOCR";
 import { crearResumenDesdeGemini, listarResumens, reconciliarResumen } from "./services/resumen";
 import { listarCargosResumen, resolverCargoResumen } from "./services/cargoResumen";
 import { registrarPagoResumen } from "./services/pagoResumen";
@@ -470,7 +470,7 @@ export function buildApp(prisma: PrismaClient) {
     try {
       const pendientes = await prisma.transaccion.findMany({
         where: {
-          origen: OrigenTransaccion.OCR_IA,
+          origen: { in: [OrigenTransaccion.OCR_IA, OrigenTransaccion.APPLE_PAY] },
           estado: { in: [EstadoTransaccion.PENDIENTE_REVISION, EstadoTransaccion.PENDIENTE_CATEGORIA] },
         },
         orderBy: { createdAt: "desc" },
@@ -569,13 +569,24 @@ export function buildApp(prisma: PrismaClient) {
     }
   });
 
-  const WalletGastoSchema = z.object({
+  const WalletGastoSchema = z.preprocess((value) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+    const input = value as Record<string, unknown>;
+    return {
+      ...input,
+      monto: input.monto ?? input.Amount,
+      comercio: input.comercio ?? input.Merchant,
+      tarjeta: input.tarjeta ?? input.Card,
+      fecha: input.fecha ?? input.Date,
+    };
+  }, z.object({
     monto: z.string().or(z.number()),
     comercio: z.string().min(1),
     tarjeta: z.string().min(4),
     fecha: z.string().optional(),
     idempotencyKey: z.string().min(1),
-  });
+    currencyCode: z.string().optional(),
+  }));
 
   app.post("/api/v1/gastos/wallet", async (request, reply) => {
     try {
@@ -593,6 +604,7 @@ export function buildApp(prisma: PrismaClient) {
     textoCrudo: z.string(),
     cuentaId: z.string().optional(),
     idempotencyKey: z.string(),
+    origen: z.literal(OrigenTransaccion.APPLE_PAY).optional(),
     data: z.object({
       monto: z.string().or(z.number()).optional(),
       categoria: z.string().optional(),
@@ -647,9 +659,11 @@ export function buildApp(prisma: PrismaClient) {
       let idempotencyKey: string | undefined;
       let pdfBuffer: Buffer | undefined;
       let mimeType = "";
+      let origen: OrigenTransaccion | undefined;
       for await (const part of request.parts()) {
         if (part.type === "field" && part.fieldname === "cuentaId") cuentaId = String(part.value);
         if (part.type === "field" && part.fieldname === "idempotencyKey") idempotencyKey = String(part.value);
+        if (part.type === "field" && part.fieldname === "origen" && part.value === OrigenTransaccion.APPLE_PAY) origen = OrigenTransaccion.APPLE_PAY;
         if (part.type === "file" && part.fieldname === "file") {
           mimeType = part.mimetype;
           pdfBuffer = await part.toBuffer();
@@ -661,12 +675,41 @@ export function buildApp(prisma: PrismaClient) {
       const rendered = await renderProtectedPdf(pdfBuffer);
       if (rendered.pages.length > 2) return reply.code(400).send({ code: "BAD_REQUEST", message: "El comprobante PDF no puede superar 2 páginas" });
       const textoCrudo = await extraerTextoComprobantePdf(rendered);
-      const resultado = await crearTransaccionOCR(prisma, { textoCrudo, cuentaId, idempotencyKey });
+      const resultado = await crearTransaccionOCR(prisma, { textoCrudo, cuentaId, idempotencyKey, origen });
       const statusCode = resultado.estado === "PENDIENTE_REVISION" || resultado.estado === "PENDIENTE_CATEGORIA" ? 202 : 201;
       return reply.code(statusCode).send(await toTransaccionResponse(resultado));
     } catch (error) {
       if (error instanceof Error) console.error("Gasto PDF OCR failed:", error.message);
       if (error instanceof Error && error.message.includes("FST_REQ_FILE_TOO_LARGE")) return reply.code(400).send({ code: "BAD_REQUEST", message: "El archivo PDF supera el límite de 15 MB" });
+      if (error instanceof Error) return fromDomainError(reply, error);
+      return internalError(reply);
+    }
+  });
+
+  app.post("/api/v1/gastos/ocr/imagen", async (request, reply) => {
+    try {
+      let cuentaId: string | undefined;
+      let idempotencyKey: string | undefined;
+      let origen: OrigenTransaccion | undefined;
+      let fileBuffer: Buffer | undefined;
+      let mimeType: "image/jpeg" | "image/png" | "image/webp" | undefined;
+      for await (const part of request.parts()) {
+        if (part.type === "field" && part.fieldname === "cuentaId") cuentaId = String(part.value);
+        if (part.type === "field" && part.fieldname === "idempotencyKey") idempotencyKey = String(part.value);
+        if (part.type === "field" && part.fieldname === "origen" && part.value === OrigenTransaccion.APPLE_PAY) origen = OrigenTransaccion.APPLE_PAY;
+        if (part.type === "file" && part.fieldname === "file") {
+          if (!["image/jpeg", "image/png", "image/webp"].includes(part.mimetype)) return reply.code(400).send({ code: "BAD_REQUEST", message: "El archivo debe ser una imagen JPEG, PNG o WEBP" });
+          mimeType = part.mimetype as typeof mimeType;
+          fileBuffer = await part.toBuffer();
+        }
+      }
+      if (!fileBuffer || !mimeType) return reply.code(400).send({ code: "BAD_REQUEST", message: "Se requiere un archivo de imagen" });
+      if (!idempotencyKey) return reply.code(400).send({ code: "BAD_REQUEST", message: "Se requiere idempotencyKey" });
+      const extracted = await interpretarComprobanteImagen(fileBuffer, mimeType);
+      const resultado = await crearTransaccionOCR(prisma, { textoCrudo: JSON.stringify(extracted), cuentaId, idempotencyKey, origen, data: { ...extracted, fecha: extracted.fecha ?? undefined, monto: extracted.monto ?? undefined, comercio: extracted.comercio ?? undefined, categoria: extracted.categoria ?? undefined } });
+      const pending = resultado.estado === EstadoTransaccion.PENDIENTE_REVISION || resultado.estado === EstadoTransaccion.PENDIENTE_CATEGORIA;
+      return reply.code(pending ? 202 : 201).send(await toTransaccionResponse(resultado));
+    } catch (error) {
       if (error instanceof Error) return fromDomainError(reply, error);
       return internalError(reply);
     }

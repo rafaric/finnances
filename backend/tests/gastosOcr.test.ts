@@ -100,6 +100,16 @@ async function run() {
     }
     if (corrected.nota !== "Compra confirmada desde OCR") throw new Error("Expected OCR note to be persisted");
 
+    const applePayOcr = await crearTransaccionOCR(prisma, {
+      textoCrudo: "monto: 42.50, categoria: COMIDA, comercio: Panadería, fecha: 13/08/2026",
+      cuentaId: cuenta.id,
+      origen: "APPLE_PAY",
+      idempotencyKey: `apple-pay-ocr-${Date.now()}`,
+    });
+    if (applePayOcr.origen !== "APPLE_PAY" || applePayOcr.comercio !== "Panadería" || applePayOcr.estado !== "CONFIRMADA") {
+      throw new Error("Expected Apple Pay OCR context to preserve OCR data and origin");
+    }
+
     const cuentaAfter = await prisma.cuenta.findUnique({
       where: { id: cuenta.id },
     });
@@ -112,7 +122,7 @@ async function run() {
     if (cuentaAfter?.saldoInicial.toString() !== "500") {
       throw new Error("Expected saldoInicial to remain immutable after OCR flow");
     }
-    if (saldo !== 50) {
+    if (saldo !== 7.5) {
       throw new Error(
         "Expected calculated saldo to reflect confirmed and corrected OCR transactions",
       );

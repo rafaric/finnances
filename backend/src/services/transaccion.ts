@@ -107,6 +107,7 @@ const GastoOCRSchema = z.object({
   textoCrudo: z.string(),
   cuentaId: z.string().optional(),
   idempotencyKey: z.string(),
+  origen: z.nativeEnum(OrigenTransaccion).optional(),
   data: z
     .object({
       monto: z.string().or(z.number()).optional(),
@@ -316,6 +317,13 @@ function interpretarOCR(textoCrudo: string, fallback?: OCRFallbackData) {
   }
 
   if (!comercio) {
+    const labeledCommerceMatch = texto.match(
+      /\bcomercio\s*:\s*([^,\n;]{3,60})/i,
+    );
+    if (labeledCommerceMatch) comercio = labeledCommerceMatch[1].trim();
+  }
+
+  if (!comercio) {
     const comercioMatch = texto.match(
       /\b(?:en|por|a)\s+([A-Za-zÁÉÍÓÚáéíóú0-9\s-]{3,40})/i,
     );
@@ -521,7 +529,7 @@ export async function corregirTransaccionOCR(
 
   if (!transaccion) throw new Error("Transaccion no encontrada");
   if (
-    transaccion.origen !== OrigenTransaccion.OCR_IA ||
+    ![OrigenTransaccion.OCR_IA, OrigenTransaccion.APPLE_PAY].includes(transaccion.origen as "OCR_IA" | "APPLE_PAY") ||
     !(
       transaccion.estado === EstadoTransaccion.PENDIENTE_REVISION ||
       transaccion.estado === EstadoTransaccion.PENDIENTE_CATEGORIA
@@ -756,7 +764,7 @@ export async function crearTransaccionOCR(
     cuentaId,
     categoriaId: categoriaResueltaId ?? "cat-otros",
     subcategoriaId: contactoCategoria?.subcategoriaId ?? undefined,
-    origen: OrigenTransaccion.OCR_IA,
+    origen: data.origen ?? OrigenTransaccion.OCR_IA,
     idempotencyKey: data.idempotencyKey,
     comercio: interpreted.comercio,
     fecha: interpreted.fecha,

@@ -47,6 +47,22 @@ export async function interpretarConGemini(textoCrudo: string): Promise<GeminiOC
   return parseGeminiOCRResponse(response.text ?? "");
 }
 
+export async function interpretarComprobanteImagen(buffer: Buffer, mimeType: "image/jpeg" | "image/png" | "image/webp"): Promise<GeminiOCRResult> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error("GEMINI_API_KEY no está configurada");
+  const { GoogleGenAI } = await import("@google/genai");
+  const client = new GoogleGenAI({ apiKey });
+  const response = await client.models.generateContent({
+    model: process.env.GEMINI_MODEL ?? "gemini-flash-lite-latest",
+    contents: [{ role: "user", parts: [
+      { text: "Extraé los datos financieros visibles de este comprobante. No inventes valores; usa null si no aparecen. Las fechas argentinas DD/MM/YYYY deben convertirse a YYYY-MM-DD. La categoría debe ser una de: COMIDA, TRANSPORTE, VIVIENDA, SERVICIOS, OCIO, DEUDAS, OTROS. Marca esTransferenciaAPersona como true solo si el destinatario es claramente una persona física." },
+      { inlineData: { mimeType, data: buffer.toString("base64") } },
+    ] }],
+    config: { responseMimeType: "application/json", responseJsonSchema, temperature: 0, maxOutputTokens: 300 },
+  });
+  return parseGeminiOCRResponse(response.text ?? "");
+}
+
 export async function extraerTextoComprobantePdf(pdf: RenderedPdf): Promise<string> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY no está configurada");
