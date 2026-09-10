@@ -1033,11 +1033,21 @@ fieldset {
   border-top: 1px solid #d5e0da;
 }
 .movement-date-separator {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   padding: 14px 2px 6px;
   color: #60766b;
   font-size: 0.78rem;
   font-weight: 800;
   text-transform: capitalize;
+}
+.movement-date-separator::before,
+.movement-date-separator::after {
+  height: 1px;
+  flex: 1;
+  background: #d5e0da;
+  content: "";
 }
 .pagination {
   display: flex;
