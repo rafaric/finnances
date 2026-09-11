@@ -100,6 +100,15 @@ async function run() {
     }
     if (corrected.nota !== "Compra confirmada desde OCR") throw new Error("Expected OCR note to be persisted");
 
+    const learnedCommerce = await crearTransaccionOCR(prisma, {
+      textoCrudo: "monto: 35, comercio: Supermercado, fecha: 14/08/2026",
+      cuentaId: cuenta.id,
+      idempotencyKey: `learned-commerce-${Date.now()}`,
+    });
+    if (learnedCommerce.estado !== "CONFIRMADA" || learnedCommerce.categoriaId !== "cat-comida") {
+      throw new Error("Expected a corrected commerce category to be reused by OCR");
+    }
+
     const applePayOcr = await crearTransaccionOCR(prisma, {
       textoCrudo: "monto: 42.50, categoria: COMIDA, comercio: Panadería, fecha: 13/08/2026",
       cuentaId: cuenta.id,
@@ -122,7 +131,7 @@ async function run() {
     if (cuentaAfter?.saldoInicial.toString() !== "500") {
       throw new Error("Expected saldoInicial to remain immutable after OCR flow");
     }
-    if (saldo !== 7.5) {
+    if (saldo !== -27.5) {
       throw new Error(
         "Expected calculated saldo to reflect confirmed and corrected OCR transactions",
       );

@@ -559,7 +559,7 @@ export async function corregirTransaccionOCR(
 
   const updated = await prisma.$transaction(async (tx) => {
     if (shouldConfirm && cuentaId) await assertSufficientFunds(tx, cuentaId, normalizedMonto, fecha);
-    return tx.transaccion.update({
+    const updated = await tx.transaccion.update({
       where: { id: transaccion.id },
       data: {
         monto: normalizedMonto ?? transaccion.monto.toString(),
@@ -574,6 +574,24 @@ export async function corregirTransaccionOCR(
         cuentaId,
       },
     });
+    const comercio = normalizeEntity(data.comercio ?? transaccion.comercio ?? "");
+    if (comercio) {
+      await tx.contactoCategoria.upsert({
+        where: { nombreDetectado: comercio },
+        update: {
+          categoriaId: data.categoriaId!,
+          subcategoriaId: data.subcategoriaId ?? transaccion.subcategoriaId,
+          usoCount: { increment: 1 },
+        },
+        create: {
+          nombreDetectado: comercio,
+          categoriaId: data.categoriaId!,
+          subcategoriaId: data.subcategoriaId ?? transaccion.subcategoriaId,
+          usoCount: 1,
+        },
+      });
+    }
+    return updated;
   });
 
   return updated;
@@ -747,9 +765,7 @@ export async function crearTransaccionOCR(
   const categoriaId = categoriaNombre ? categoriaNombreToId(categoriaNombre) : undefined;
 
   const esTransferenciaAPersona = "esTransferenciaAPersona" in interpreted && interpreted.esTransferenciaAPersona === true;
-  const contactoCategoria = esTransferenciaAPersona
-    ? await resolverContactoCategoria(prisma, interpreted.comercio)
-    : undefined;
+  const contactoCategoria = await resolverContactoCategoria(prisma, interpreted.comercio);
   const categoriaResueltaId = contactoCategoria?.categoriaId ?? categoriaId;
   const estado = cuentaId && interpreted.monto && contactoCategoria
     ? EstadoTransaccion.CONFIRMADA
