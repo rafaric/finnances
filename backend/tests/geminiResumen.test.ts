@@ -1,4 +1,4 @@
-import { parseGeminiResumenResponse } from "../src/services/geminiResumen";
+import { mergeGeminiResumenes, parseGeminiResumenResponse } from "../src/services/geminiResumen";
 
 const valid = JSON.stringify({
   consumos: [{ fecha: "2026-07-02", comercio: "Óptica", monto: 100, moneda: "ARS", cuotaActual: 1, cuotasTotales: 3 }],
@@ -36,5 +36,19 @@ try {
   rejected = true;
 }
 if (!rejected) throw new Error("invalid period should be rejected");
+
+const pageResult = JSON.parse(valid);
+const merged = mergeGeminiResumenes([
+  pageResult,
+  { ...pageResult, consumos: [
+    ...pageResult.consumos,
+    { fecha: "2026-07-03", comercio: "Supermercado", monto: 250, moneda: "USD", cuotaActual: null, cuotasTotales: null },
+  ], montoTotal: 1000, totalConsumos: 900, totalConsumosUSD: 250 },
+]);
+if (merged.consumos.length !== 2) throw new Error("duplicated consumptions were not removed");
+if (merged.totalConsumos !== 900 || merged.totalConsumosUSD !== 250 || merged.montoTotal !== 1000) {
+  throw new Error("duplicated page totals were double-counted");
+}
+if (merged.consumos.find((consumo) => consumo.moneda === "USD")?.monto !== 250) throw new Error("USD consumption was not preserved");
 
 console.log("✓ Gemini summary response validation passed");
