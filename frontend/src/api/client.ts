@@ -14,6 +14,7 @@ import type {
   TransferenciaResponseDTO,
   TransaccionResponseDTO,
   CrearIngresoInput,
+  EditarIngresoInput,
   IngresoResponseDTO,
   CategoriaResponseDTO,
   SubcategoriaResponseDTO,
@@ -118,6 +119,10 @@ export function crearIngreso(token: string, input: CrearIngresoInput): Promise<I
     method: "POST",
     body: JSON.stringify(input),
   });
+}
+
+export function editarIngreso(token: string, id: string, input: EditarIngresoInput): Promise<IngresoResponseDTO> {
+  return request<IngresoResponseDTO>(token, `/api/v1/ingresos/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(input) });
 }
 
 export function crearTransferencia(

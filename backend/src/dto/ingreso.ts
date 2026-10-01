@@ -14,6 +14,16 @@ export interface IngresoResponseDTO {
   cuenta: CuentaResumenDTO;
 }
 
+export interface EditarIngresoInput {
+  monto?: string | number;
+  fechaCobro?: string;
+  periodoDisponible?: string;
+  iniciaCicloFinanciero?: boolean;
+  cuentaId?: string;
+  categoriaId?: string;
+  subcategoriaId?: string | null;
+}
+
 interface IngresoConCategoria extends Ingreso {
   categoria: { id: string; nombre: string; icono: string; color: string; tipo: string; activa: boolean };
   subcategoria?: { id: string; nombre: string; categoriaId: string } | null;
