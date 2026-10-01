@@ -177,10 +177,11 @@ export function Home({
 
       <div className="actions-grid">
         <button type="button" onClick={onRegisterExpense}>Registrar gasto</button>
-        <button type="button" onClick={onRegisterIncome}>Registrar ingreso</button>
-       <button type="button" onClick={onRecurrentes}>Gastos recurrentes</button>
-        <button type="button" onClick={onTarjetas}>Tarjetas y resúmenes</button>
-      </div>
+         <button type="button" onClick={onRegisterIncome}>Registrar ingreso</button>
+        <button type="button" onClick={onRecurrentes}>Gastos recurrentes</button>
+         <button type="button" onClick={onTarjetas}>Tarjetas y resúmenes</button>
+         <button type="button" disabled={accounts.length < 2} onClick={onTransfer}>Transferencia</button>
+       </div>
 
       <section className={isAccountsExpanded ? "accounts-widget expanded" : "accounts-widget"}>
         <div className="accounts-widget-heading">

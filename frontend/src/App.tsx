@@ -80,6 +80,7 @@ function App() {
   const [categoriaId, setCategoriaId] = useState<string>();
   const [subcategoriaId, setSubcategoriaId] = useState<string>();
   const [date, setDate] = useState(() => dateValue());
+  const [merchant, setMerchant] = useState("");
   const [note, setNote] = useState("");
   const [incomePeriod, setIncomePeriod] = useState(() => currentPeriod());
   const [startsFinancialCycle, setStartsFinancialCycle] = useState(false);
@@ -391,9 +392,9 @@ function App() {
         return;
       }
       if (!navigator.onLine) {
-        const payload = { monto: amount, cuentaId: selectedAccountId, categoriaId: categoriaId ?? "cat-otros", subcategoriaId, origen: "MANUAL" as const, fecha: date, nota: note.trim() || undefined, idempotencyKey: crypto.randomUUID() };
+        const payload = { monto: amount, cuentaId: selectedAccountId, categoriaId: categoriaId ?? "cat-otros", subcategoriaId, origen: "MANUAL" as const, fecha: date, comercio: merchant.trim() || undefined, nota: note.trim() || undefined, idempotencyKey: crypto.randomUUID() };
         await enqueueOfflineOperation({ id: payload.idempotencyKey, kind: "gasto", payload });
-        setAmount(""); setNote(""); setCategoriaId(undefined); setSubcategoriaId(undefined); setNotice("Gasto guardado en el dispositivo. Se sincronizará al reconectar."); setScreen("inicio");
+        setAmount(""); setMerchant(""); setNote(""); setCategoriaId(undefined); setSubcategoriaId(undefined); setNotice("Gasto guardado en el dispositivo. Se sincronizará al reconectar."); setScreen("inicio");
         return;
       }
       const transaction = await crearGasto(connection.token, {
@@ -403,6 +404,7 @@ function App() {
         subcategoriaId,
         origen: "MANUAL",
         fecha: date,
+        comercio: merchant.trim() || undefined,
         nota: note.trim() || undefined,
         idempotencyKey: crypto.randomUUID(),
       });
@@ -418,6 +420,7 @@ function App() {
          void getResumenMensual(connection.token, period).then(setMonthlySummary).catch(() => undefined);
       }
       setAmount("");
+      setMerchant("");
       setNote("");
       setNotice(`Gasto registrado. Saldo actual: ${currency(transactionAccount.saldoActual)}.`);
       setScreen("inicio");
@@ -567,11 +570,11 @@ function App() {
             <CategorySelector token={connection.token} tipo={transactionType} categoriaId={categoriaId} subcategoriaId={subcategoriaId} onCategoriaChange={setCategoriaId} onSubcategoriaChange={setSubcategoriaId} />
              {transactionType === "INGRESO" ? <><label className="form-field"><span>Disponible en</span><input type="month" value={incomePeriod} onChange={(event) => setIncomePeriod(event.target.value)} /></label><label className="remember-connection"><input type="checkbox" checked={startsFinancialCycle} onChange={(event) => setStartsFinancialCycle(event.target.checked)} /><span>Este ingreso inicia el ciclo financiero</span></label>{accounts.find((account) => account.id === selectedAccountId)?.tipo !== "TARJETA_CREDITO" ? <label className="remember-connection"><input type="checkbox" checked={confirmAutomaticDebits} onChange={(event) => setConfirmAutomaticDebits(event.target.checked)} /><span>Confirmar débitos automáticos de tarjetas</span></label> : null}</> : null}
 
-            {transactionType === "GASTO" ? <label className="form-field">
-             <span>{accounts.find((account) => account.id === selectedAccountId)?.tipo === "TARJETA_CREDITO" ? "Comercio" : "Nota"} <small>{accounts.find((account) => account.id === selectedAccountId)?.tipo === "TARJETA_CREDITO" ? "(obligatorio)" : "(opcional)"}</small></span>
-             <input required={accounts.find((account) => account.id === selectedAccountId)?.tipo === "TARJETA_CREDITO"} type="text" maxLength={60} value={note} onChange={(event) => setNote(event.target.value)} placeholder={accounts.find((account) => account.id === selectedAccountId)?.tipo === "TARJETA_CREDITO" ? "Nombre del comercio" : "¿En qué fue?"} />
-             <small className="character-count">{note.length}/60</small>
-           </label> : null}
+            {transactionType === "GASTO" && accounts.find((account) => account.id === selectedAccountId)?.tipo !== "TARJETA_CREDITO" ? <>
+              <label className="form-field"><span>Comercio <small>(opcional)</small></span><input type="text" maxLength={60} value={merchant} onChange={(event) => setMerchant(event.target.value)} placeholder="Nombre del comercio" /><small className="character-count">{merchant.length}/60</small></label>
+              <label className="form-field"><span>Nota <small>(opcional)</small></span><input type="text" maxLength={60} value={note} onChange={(event) => setNote(event.target.value)} placeholder="¿En qué fue?" /><small className="character-count">{note.length}/60</small></label>
+            </> : null}
+            {transactionType === "GASTO" && accounts.find((account) => account.id === selectedAccountId)?.tipo === "TARJETA_CREDITO" ? <label className="form-field"><span>Comercio <small>(obligatorio)</small></span><input required type="text" maxLength={60} value={note} onChange={(event) => setNote(event.target.value)} placeholder="Nombre del comercio" /><small className="character-count">{note.length}/60</small></label> : null}
            {transactionType === "GASTO" && accounts.find((account) => account.id === selectedAccountId)?.tipo === "TARJETA_CREDITO" ? <label className="form-field"><span>Cantidad de cuotas</span><input required type="number" min="1" max="120" value={installments} onChange={(event) => setInstallments(event.target.value)} /></label> : null}
 
            <button className="primary-action" disabled={isSaving || accounts.length === 0} type="submit">

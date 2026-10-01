@@ -91,6 +91,7 @@ beforeEach(() => {
   sessionStorage.setItem("finnances.apiToken", "token-123");
   listCuentasMock.mockResolvedValue([account]);
   getResumenMensualMock.mockResolvedValue(summary);
+  crearGastoMock.mockReset();
   crearGastoMock.mockResolvedValue(transaction);
   listCategoriasMock.mockResolvedValue([categoriaTransporte]);
   listSubcategoriasMock.mockResolvedValue([]);
@@ -110,6 +111,7 @@ describe("App expense form", () => {
     await user.click(screen.getByRole("button", { name: "Ayer" }));
     await user.selectOptions(screen.getByRole("combobox", { name: /Cuenta/ }), account.id);
     await user.click(screen.getByRole("button", { name: "Transporte" }));
+    await user.type(screen.getByPlaceholderText("Nombre del comercio"), "SUBE");
     await user.type(screen.getByPlaceholderText("¿En qué fue?"), "Carga SUBE");
     await user.click(screen.getByRole("button", { name: "Registrar gasto" }));
 
@@ -119,10 +121,26 @@ describe("App expense form", () => {
       cuentaId: "account-1",
       categoriaId: "cat-transporte",
       origen: "MANUAL",
+      comercio: "SUBE",
       nota: "Carga SUBE",
       idempotencyKey: expect.any(String),
       fecha: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
     }));
+  });
+
+  it("omits empty commerce and note from a manual expense payload", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await screen.findByText("Finnances");
+    await user.click(screen.getByRole("button", { name: "Registrar movimiento" }));
+    await user.type(screen.getByRole("spinbutton"), "1250");
+    await user.selectOptions(screen.getByRole("combobox", { name: /Cuenta/ }), account.id);
+    await user.click(screen.getByRole("button", { name: "Transporte" }));
+    await user.click(screen.getByRole("button", { name: "Registrar gasto" }));
+
+    await waitFor(() => expect(crearGastoMock).toHaveBeenCalledOnce());
+    expect(crearGastoMock).toHaveBeenCalledWith("token-123", expect.objectContaining({ comercio: undefined, nota: undefined }));
   });
 
   it("edits an account OCR entity from the account manager", async () => {
@@ -156,8 +174,7 @@ describe("App expense form", () => {
     render(<App />);
 
     await screen.findByText("Finnances");
-    await user.click(screen.getByRole("button", { name: /Mis cuentas/ }));
-    await user.click(screen.getByRole("button", { name: "Transferir" }));
+    await user.click(screen.getByRole("button", { name: "Transferencia" }));
     await user.type(screen.getByRole("spinbutton"), "1500");
     await user.type(screen.getByPlaceholderText("¿Para qué es?"), "Ahorro");
     await user.click(screen.getByRole("button", { name: "Transferir" }));
