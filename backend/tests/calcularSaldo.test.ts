@@ -103,7 +103,8 @@ async function run() {
     const resumenActual = await prisma.resumen.create({
       data: {
         cuentaId: tarjeta.id,
-        periodo: "2026-07",
+         periodo: "2026-07",
+         fechaCierre: new Date("2026-08-01"),
         montoTotalInformado: "1300",
         montoMinimoInformado: "130",
       },
@@ -116,6 +117,16 @@ async function run() {
         fecha: new Date("2026-08-10"),
         tipo: "DEBITO_AUTOMATICO",
         idempotencyKey: `saldo-card-current-${ts}`,
+      },
+    });
+    await prisma.pagoResumen.create({
+      data: {
+        resumenId: resumenActual.id,
+        cuentaOrigenId: cuenta.id,
+        monto: "500",
+        fecha: new Date("2026-07-31"),
+        tipo: "DEBITO_AUTOMATICO",
+        idempotencyKey: `saldo-card-before-close-${ts}`,
       },
     });
     const saldoTarjeta = await calcularSaldo(prisma, tarjeta.id);

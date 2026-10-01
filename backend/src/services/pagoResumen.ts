@@ -1,6 +1,7 @@
 import { PrismaClient, TipoCuenta, TipoPagoResumen } from "@prisma/client";
 import { z } from "zod";
 import { crearTransferenciaInterna } from "./transaccion";
+import { sumarPagosElegibles } from "./pagosResumenElegibles";
 
 const CrearPagoSchema = z.object({
   cuentaOrigenId: z.string(),
@@ -20,8 +21,9 @@ export async function registrarPagoResumen(prisma: PrismaClient, resumenId: stri
 
   const amount = Number(data.monto);
   if (!Number.isFinite(amount) || amount <= 0) throw new Error("Monto inválido");
-  const paid = await prisma.pagoResumen.aggregate({ where: { resumenId }, _sum: { monto: true } });
-  const remaining = Number(resumen.montoTotalInformado) - Number(paid._sum.monto ?? 0);
+  const pagos = await prisma.pagoResumen.findMany({ where: { resumenId }, select: { fecha: true, monto: true } });
+  const totalPaidBefore = sumarPagosElegibles(pagos, resumen.fechaCierre);
+  const remaining = Number(resumen.montoTotalInformado) - totalPaidBefore;
   if (amount > remaining + 0.01) throw new Error("El pago supera el saldo pendiente del resumen");
 
   const source = await prisma.cuenta.findUnique({ where: { id: data.cuentaOrigenId } });
@@ -35,7 +37,7 @@ export async function registrarPagoResumen(prisma: PrismaClient, resumenId: stri
     idempotencyKey: `pago-resumen-transfer-${data.idempotencyKey}`,
   });
   const payment = await prisma.pagoResumen.create({ data: { resumenId, cuentaOrigenId: data.cuentaOrigenId, monto: amount, fecha: new Date(data.fecha), tipo: data.tipo, transferenciaId: transfer.id, idempotencyKey: data.idempotencyKey } });
-  const totalPaid = Number(paid._sum.monto ?? 0) + amount;
+  const totalPaid = totalPaidBefore + amount;
   await prisma.resumen.update({ where: { id: resumenId }, data: { montoPagado: totalPaid, fechaPago: new Date(data.fecha), estado: totalPaid + 0.01 >= Number(resumen.montoTotalInformado) ? "PAGADO_TOTAL" : "PAGADO_PARCIAL" } });
   return payment;
 }
@@ -56,8 +58,8 @@ export async function registrarDebitosAutomaticos(prisma: PrismaClient, cuentaOr
       return candidate.fechaCierre <= debitDate && debitDate <= candidate.fechaVencimiento;
     });
     if (!resumen) continue;
-    const paid = await prisma.pagoResumen.aggregate({ where: { resumenId: resumen.id }, _sum: { monto: true } });
-    const pending = Math.max(0, Number(resumen.montoMinimoInformado) - Number(paid._sum.monto ?? 0));
+    const pagos = await prisma.pagoResumen.findMany({ where: { resumenId: resumen.id }, select: { fecha: true, monto: true } });
+    const pending = Math.max(0, Number(resumen.montoMinimoInformado) - sumarPagosElegibles(pagos, resumen.fechaCierre));
     if (pending <= 0) continue;
     payments.push(await registrarPagoResumen(prisma, resumen.id, {
       cuentaOrigenId,

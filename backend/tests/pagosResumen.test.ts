@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { crearCompra } from "../src/services/compra";
 import { registrarDebitosAutomaticos } from "../src/services/pagoResumen";
+import { sumarPagosElegibles } from "../src/services/pagosResumenElegibles";
 
 async function run() {
   const prisma = new PrismaClient();
@@ -33,8 +34,13 @@ async function run() {
       if (consecutivePayments.length !== 1 || consecutivePayments[0].resumenId !== consecutiveNext.id || Number(consecutivePayments[0].monto) !== 300) throw new Error("previous summary payment leaked into next minimum");
 
       const noDates = await prisma.resumen.create({ data: { cuentaId: tarjeta.id, periodo: "2026-12", montoTotalInformado: "400", montoMinimoInformado: "150", estado: "PENDIENTE" } });
-      const noDatesPayments = await registrarDebitosAutomaticos(prisma, nbch.id, "2026-12-01", `no-dates-${suffix}`);
+     const noDatesPayments = await registrarDebitosAutomaticos(prisma, nbch.id, "2026-12-01", `no-dates-${suffix}`);
       if (noDatesPayments.some((payment) => payment.resumenId === noDates.id)) throw new Error("summary without dates was selected");
+      if (sumarPagosElegibles([
+        { fecha: new Date("2026-08-31"), monto: "90" },
+        { fecha: new Date("2026-09-30"), monto: "40" },
+      ], new Date("2026-09-01")) !== 40) throw new Error("payment before closing date was included");
+      if (sumarPagosElegibles([{ fecha: new Date("2026-09-30"), monto: "40" }], null) !== 0) throw new Error("summary without closing date invented a payment window");
       console.log("✓ automatic minimum debit is time-scoped, idempotent and does not confirm quotas");
   } finally {
     await prisma.$disconnect();

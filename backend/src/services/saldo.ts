@@ -1,4 +1,5 @@
 import { EstadoTransaccion, PrismaClient } from "@prisma/client";
+import { sumarPagosElegibles } from "./pagosResumenElegibles";
 
 export async function calcularSaldo(
   prisma: PrismaClient,
@@ -15,11 +16,11 @@ export async function calcularSaldo(
     });
 
     if (resumen) {
-      const pagos = await prisma.pagoResumen.aggregate({
+      const pagos = await prisma.pagoResumen.findMany({
         where: { resumenId: resumen.id, ...(asOf ? { fecha: { lte: asOf } } : {}) },
-        _sum: { monto: true },
+        select: { fecha: true, monto: true },
       });
-      const pendiente = Math.max(0, Number(resumen.montoTotalInformado) - Number(pagos._sum.monto ?? 0));
+      const pendiente = Math.max(0, Number(resumen.montoTotalInformado) - sumarPagosElegibles(pagos, resumen.fechaCierre));
       return Number((-pendiente).toFixed(2));
     }
   }
