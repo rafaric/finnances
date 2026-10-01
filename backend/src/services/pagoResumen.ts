@@ -44,13 +44,15 @@ export async function registrarDebitosAutomaticos(prisma: PrismaClient, cuentaOr
   const cards = await prisma.cuenta.findMany({ where: { cuentaDebitoMinimoId: cuentaOrigenId, tipo: TipoCuenta.TARJETA_CREDITO } });
   const payments = [];
   const debitDate = new Date(fecha);
+  if (Number.isNaN(debitDate.getTime())) throw new Error("Fecha de débito inválida");
   for (const card of cards) {
     const summaries = await prisma.resumen.findMany({
       where: { cuentaId: card.id, estado: { in: ["PENDIENTE", "PAGADO_PARCIAL"] } },
       orderBy: { periodo: "desc" },
     });
     const resumen = summaries.find((candidate) => {
-      if (!candidate.fechaCierre || !candidate.fechaVencimiento) return true;
+      if (!candidate.fechaCierre || !candidate.fechaVencimiento) return false;
+      if (Number.isNaN(candidate.fechaCierre.getTime()) || Number.isNaN(candidate.fechaVencimiento.getTime())) return false;
       return candidate.fechaCierre <= debitDate && debitDate <= candidate.fechaVencimiento;
     });
     if (!resumen) continue;
