@@ -28,7 +28,7 @@ import { calcularResumenMensual } from "./services/resumenMensual";
 import { calcularTendenciaAnalisis } from "./services/tendenciaAnalisis";
 import { toTendenciaMesDTO } from "./dto/tendenciaAnalisis";
 import { getAnalisisInsight, refreshAnalisisInsight } from "./services/analisisInsight";
-import { crearIngreso } from "./services/ingreso";
+import { crearIngreso, editarIngreso } from "./services/ingreso";
 import { toIngresoDTO } from "./dto/ingreso";
 import {
   confirmarInstanciaRecurrente,
@@ -277,6 +277,27 @@ export function buildApp(prisma: PrismaClient) {
     }
   });
 
+  app.patch("/api/v1/ingresos/:id", async (request, reply) => {
+    try {
+      const params = z.object({ id: z.string() }).parse(request.params);
+      const ingreso = await editarIngreso(prisma, params.id, request.body as never);
+      if (ingreso.iniciaCicloFinanciero) {
+        await prisma.cicloFinanciero.upsert({
+          where: { periodo: ingreso.periodoDisponible },
+          update: { inicio: ingreso.fechaCobro },
+          create: { periodo: ingreso.periodoDisponible, inicio: ingreso.fechaCobro },
+        });
+      }
+      const categoria = await prisma.categoria.findUnique({ where: { id: ingreso.categoriaId } });
+      const subcategoria = ingreso.subcategoriaId ? await prisma.subcategoria.findUnique({ where: { id: ingreso.subcategoriaId } }) : null;
+      return reply.send(toIngresoDTO({ ...ingreso, categoria: categoria!, subcategoria }, await toCuentaResumen(ingreso.cuentaId)));
+    } catch (error) {
+      if (error instanceof ZodError) return fromZodError(reply, error);
+      if (error instanceof Error) return fromDomainError(reply, error);
+      return internalError(reply);
+    }
+  });
+
   const CuentaSchema = z.object({
     nombre: z.string().min(1),
     tipo: z.enum(["EFECTIVO", "BILLETERA_VIRTUAL", "CUENTA_BANCARIA", "TARJETA_CREDITO"]),
@@ -414,7 +435,9 @@ export function buildApp(prisma: PrismaClient) {
           activa: income.categoria.activa,
         },
         subcategoria: income.subcategoria ?? undefined,
-        fecha: income.fechaCobro.toISOString(),
+         fecha: income.fechaCobro.toISOString(),
+         periodoDisponible: income.periodoDisponible,
+         iniciaCicloFinanciero: income.iniciaCicloFinanciero,
         estado: "CONFIRMADA" as const,
         esTransferenciaAPersona: false,
         cuenta: await toCuentaResumen(income.cuentaId),

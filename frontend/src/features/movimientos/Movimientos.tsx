@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { ArrowLeftRight, Check, CreditCard, Funnel, Keyboard, PenLine, ReceiptText, RefreshCw, Trash2, X, Zap } from "lucide-react";
-import { editarGasto, eliminarGasto, listCategorias, listTransacciones, listTransferencias } from "../../api/client";
+import { editarGasto, editarIngreso, eliminarGasto, listCategorias, listTransacciones, listTransferencias } from "../../api/client";
 import type {
   CuentaResponseDTO,
   EstadoTransaccion,
@@ -81,6 +81,8 @@ export function Movimientos({ token, accounts, onRegisterExpense, onDataChanged 
   const [editSubcategoryId, setEditSubcategoryId] = useState<string>();
   const [editMerchant, setEditMerchant] = useState("");
   const [editNote, setEditNote] = useState("");
+  const [editAvailablePeriod, setEditAvailablePeriod] = useState("");
+  const [editStartsCycle, setEditStartsCycle] = useState(false);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const defaultPeriod = new Date().toISOString().slice(0, 7);
 
@@ -154,6 +156,8 @@ export function Movimientos({ token, accounts, onRegisterExpense, onDataChanged 
     setEditSubcategoryId(transaction.subcategoria?.id);
     setEditMerchant(transaction.comercio ?? "");
     setEditNote(transaction.nota ?? "");
+    setEditAvailablePeriod(transaction.periodoDisponible ?? transaction.fecha.slice(0, 7));
+    setEditStartsCycle(transaction.iniciaCicloFinanciero ?? false);
   }
 
   async function saveEdit(event: FormEvent<HTMLFormElement>) {
@@ -161,7 +165,17 @@ export function Movimientos({ token, accounts, onRegisterExpense, onDataChanged 
     if (!editingTransaction || !editCategoryId) return;
     setIsSavingEdit(true);
     try {
-      await editarGasto(token, editingTransaction.id, {
+      if (editingTransaction.monto > 0) {
+        await editarIngreso(token, editingTransaction.id, {
+          monto: editAmount,
+          fechaCobro: editDate,
+          periodoDisponible: editAvailablePeriod,
+          iniciaCicloFinanciero: editStartsCycle,
+          cuentaId: editAccountId,
+          categoriaId: editCategoryId,
+          subcategoriaId: editSubcategoryId ?? null,
+        });
+      } else await editarGasto(token, editingTransaction.id, {
         monto: editAmount,
         fecha: editDate,
         cuentaId: editAccountId,
@@ -176,7 +190,7 @@ export function Movimientos({ token, accounts, onRegisterExpense, onDataChanged 
       setReloadVersion((current) => current + 1);
       onDataChanged?.();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "No se pudo editar el gasto.");
+      setError(requestError instanceof Error ? requestError.message : "No se pudo editar el movimiento.");
     } finally {
       setIsSavingEdit(false);
     }
@@ -259,7 +273,7 @@ export function Movimientos({ token, accounts, onRegisterExpense, onDataChanged 
                   <div className="movement-amount">
                     <strong className={transaction.monto < 0 ? "expense" : "income"}>{transaction.monto < 0 ? "-" : "+"}{formatCurrency(transaction.monto)}</strong>
                     <span className="movement-status"><span className={transaction.estado === "CONFIRMADA" ? "status-confirmed" : "status-pending"}>{transaction.estado === "CONFIRMADA" ? <Check aria-hidden="true" /> : "Pendiente"}</span>{originMeta(transaction.origen).label}</span>
-                    {transaction.monto < 0 && (transaction.origen === "MANUAL" || transaction.origen === "OCR_IA") ? <div className="movement-actions"><button type="button" aria-label="Editar gasto" title="Editar gasto" onClick={() => openEditor(transaction)}><PenLine aria-hidden="true" /></button><button type="button" aria-label="Eliminar gasto" title="Eliminar gasto" onClick={() => setDeletingTransaction(transaction)}><Trash2 aria-hidden="true" /></button></div> : null}
+                     {(transaction.monto < 0 || transaction.monto > 0) && transaction.origen === "MANUAL" ? <div className="movement-actions"><button type="button" aria-label={transaction.monto > 0 ? "Editar ingreso" : "Editar gasto"} title={transaction.monto > 0 ? "Editar ingreso" : "Editar gasto"} onClick={() => openEditor(transaction)}><PenLine aria-hidden="true" /></button>{transaction.monto < 0 ? <button type="button" aria-label="Eliminar gasto" title="Eliminar gasto" onClick={() => setDeletingTransaction(transaction)}><Trash2 aria-hidden="true" /></button> : null}</div> : null}
                   </div>
                 </article>
                </>); } const transferencia = item.value; return (<>{separator}
@@ -272,7 +286,7 @@ export function Movimientos({ token, accounts, onRegisterExpense, onDataChanged 
             {result?.hasNextPage ? <div className="load-more"><span>{result.items.length} movimientos cargados</span><button className="primary-action" type="button" disabled={isLoading} onClick={() => setPage((current) => current + 1)}>{isLoading ? "Cargando..." : "Cargar más"}</button></div> : <p className="movement-end">Mostrando todos los movimientos de este filtro</p>}
           </>
         ) : null}
-        {editingTransaction ? <div className="modal-backdrop" role="presentation"><form className="connection-modal movement-edit-modal" role="dialog" aria-modal="true" aria-labelledby="edit-expense-title" onSubmit={saveEdit}><div className="section-heading"><h2 id="edit-expense-title">Editar gasto</h2><button className="icon-button" type="button" aria-label="Cerrar" onClick={() => setEditingTransaction(undefined)}><X size={18} /></button></div><label className="form-field"><span>Monto</span><input required inputMode="decimal" value={editAmount} onChange={(event) => setEditAmount(event.target.value)} /></label><label className="form-field"><span>Fecha</span><input required type="date" value={editDate} onChange={(event) => setEditDate(event.target.value)} /></label><label className="form-field"><span>Cuenta</span><select required value={editAccountId} onChange={(event) => setEditAccountId(event.target.value)}>{accounts.map((account) => <option key={account.id} value={account.id}>{account.nombre}</option>)}</select></label><CategorySelector token={token} tipo="GASTO" categoriaId={editCategoryId} subcategoriaId={editSubcategoryId} onCategoriaChange={(next) => { setEditCategoryId(next); setEditSubcategoryId(undefined); }} onSubcategoriaChange={setEditSubcategoryId} /><label className="form-field"><span>Comercio</span><input maxLength={60} value={editMerchant} onChange={(event) => setEditMerchant(event.target.value)} /></label><label className="form-field"><span>Nota</span><input maxLength={120} value={editNote} onChange={(event) => setEditNote(event.target.value)} /></label><div className="modal-actions"><button type="button" onClick={() => setEditingTransaction(undefined)}>Cancelar</button><button className="primary-action" type="submit" disabled={isSavingEdit}>{isSavingEdit ? "Guardando..." : "Guardar cambios"}</button></div></form></div> : null}
+         {editingTransaction ? <div className="modal-backdrop" role="presentation"><form className="connection-modal movement-edit-modal" role="dialog" aria-modal="true" aria-labelledby="edit-expense-title" onSubmit={saveEdit}><div className="section-heading"><h2 id="edit-expense-title">{editingTransaction.monto > 0 ? "Editar ingreso" : "Editar gasto"}</h2><button className="icon-button" type="button" aria-label="Cerrar" onClick={() => setEditingTransaction(undefined)}><X size={18} /></button></div><label className="form-field"><span>Monto</span><input required inputMode="decimal" value={editAmount} onChange={(event) => setEditAmount(event.target.value)} /></label><label className="form-field"><span>Fecha</span><input required type="date" value={editDate} onChange={(event) => setEditDate(event.target.value)} /></label>{editingTransaction.monto > 0 ? <><label className="form-field"><span>Período disponible</span><input required type="month" value={editAvailablePeriod} onChange={(event) => setEditAvailablePeriod(event.target.value)} /></label><label className="form-field"><span>Inicia ciclo financiero</span><input type="checkbox" checked={editStartsCycle} onChange={(event) => setEditStartsCycle(event.target.checked)} /></label></> : null}<label className="form-field"><span>Cuenta</span><select required value={editAccountId} onChange={(event) => setEditAccountId(event.target.value)}>{accounts.map((account) => <option key={account.id} value={account.id}>{account.nombre}</option>)}</select></label><CategorySelector token={token} tipo={editingTransaction.monto > 0 ? "INGRESO" : "GASTO"} categoriaId={editCategoryId} subcategoriaId={editSubcategoryId} onCategoriaChange={(next) => { setEditCategoryId(next); setEditSubcategoryId(undefined); }} onSubcategoriaChange={setEditSubcategoryId} />{editingTransaction.monto < 0 ? <><label className="form-field"><span>Comercio</span><input maxLength={60} value={editMerchant} onChange={(event) => setEditMerchant(event.target.value)} /></label><label className="form-field"><span>Nota</span><input maxLength={120} value={editNote} onChange={(event) => setEditNote(event.target.value)} /></label></> : null}<div className="modal-actions"><button type="button" onClick={() => setEditingTransaction(undefined)}>Cancelar</button><button className="primary-action" type="submit" disabled={isSavingEdit}>{isSavingEdit ? "Guardando..." : "Guardar cambios"}</button></div></form></div> : null}
        {deletingTransaction ? <div className="modal-backdrop" role="presentation"><section className="connection-modal" role="dialog" aria-modal="true" aria-labelledby="delete-expense-title"><div className="section-heading"><h2 id="delete-expense-title">Eliminar gasto</h2><button className="icon-button" type="button" aria-label="Cerrar" onClick={() => setDeletingTransaction(undefined)}><X size={18} /></button></div><p>¿Querés eliminar el gasto de <strong>{formatCurrency(deletingTransaction.monto)}</strong> del <strong>{formatDate(deletingTransaction.fecha)}</strong>?</p><p>Esta acción actualizará el saldo de la cuenta y no se puede deshacer.</p><div className="modal-actions"><button type="button" onClick={() => setDeletingTransaction(undefined)}>Cancelar</button><button className="danger-action" type="button" onClick={() => void removeTransaction(deletingTransaction)}>Eliminar gasto</button></div></section></div> : null}
      </section>
   );

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiRequestError, crearGasto, crearTransferencia, eliminarGasto, listTransacciones } from "./client";
+import { ApiRequestError, crearGasto, crearTransferencia, editarIngreso, eliminarGasto, listTransacciones } from "./client";
 
 const originalFetch = globalThis.fetch;
 
@@ -9,6 +9,13 @@ afterEach(() => {
 });
 
 describe("API client", () => {
+  it("serializes manual income edits with cycle fields", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ id: "income-1" }), { status: 200 }));
+    globalThis.fetch = fetchMock;
+    const input = { monto: "2500", fechaCobro: "2026-08-15", periodoDisponible: "2026-09", iniciaCicloFinanciero: true, cuentaId: "account-1", categoriaId: "cat-sueldo", subcategoriaId: "sub-sueldo" };
+    await editarIngreso("token-123", "income-1", input);
+    expect(fetchMock).toHaveBeenCalledWith("http://localhost:4000/api/v1/ingresos/income-1", expect.objectContaining({ method: "PATCH", body: JSON.stringify(input) }));
+  });
   it("sends bearer token and transaction query parameters", async () => {
     const response = {
       items: [],

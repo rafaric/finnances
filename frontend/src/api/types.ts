@@ -92,6 +92,16 @@ export interface CrearIngresoInput {
   confirmarDebitosAutomaticos?: boolean;
 }
 
+export interface EditarIngresoInput {
+  monto?: string;
+  fechaCobro?: string;
+  periodoDisponible?: string;
+  iniciaCicloFinanciero?: boolean;
+  cuentaId?: string;
+  categoriaId?: string;
+  subcategoriaId?: string | null;
+}
+
 export type FrecuenciaRecurrente = "MENSUAL";
 export const TIPO_MONTO_RECURRENTES = { FIJO: "FIJO", VARIABLE: "VARIABLE" } as const;
 export type TipoMontoRecurrente = (typeof TIPO_MONTO_RECURRENTES)[keyof typeof TIPO_MONTO_RECURRENTES];
@@ -176,6 +186,8 @@ export interface TransaccionResponseDTO {
   cuenta?: CuentaResumenDTO;
   textoCrudoOCR?: string;
   esTransferenciaAPersona: boolean;
+  periodoDisponible?: string;
+  iniciaCicloFinanciero?: boolean;
 }
 
 export interface PaginatedResponseDTO<T> {
